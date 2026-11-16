@@ -29,6 +29,19 @@ describe("scrapeBank failure handling", () => {
     expect(scrape).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the password out of the stored error when the library dumps the login request", async () => {
+    const credentials = { id: "123456782", card6Digits: "654321", password: "Passw0rd!x" };
+    const body = { KodMishtamesh: "bankuser", MisparZihuy: credentials.id, Sisma: credentials.password, cardSuffix: credentials.card6Digits };
+    scrape.mockResolvedValue({
+      success: false,
+      errorType: "GENERIC",
+      errorMessage: `fetchPostWithinPage parse error: Unexpected token <, url: https://x.example/?reqName=performLogonI, data: ${JSON.stringify(body)}, extraHeaders: {}, result: <html>down</html>, status: 200`,
+    });
+    const r = await scrapeBank(1, "isracard", credentials, new Date("2026-08-01"));
+    expect(r.success).toBe(false);
+    expect(r.errorMessage).not.toMatch(/Passw0rd|bankuser|123456782|654321/);
+  });
+
   it("does not retry a timeout, which can mean a second login or SMS", async () => {
     scrape.mockResolvedValue({ success: false, errorType: "TIMEOUT", errorMessage: "timed out" });
     await scrapeBank(1, "isracard", {}, new Date("2026-08-01"));

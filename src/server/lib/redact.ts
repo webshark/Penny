@@ -16,6 +16,25 @@ export function redact(text: string): string {
   return RULES.reduce((out, [re, rep]) => out.replace(re, rep), text);
 }
 
+/**
+ * For error text that comes from a scraper library. Such text can embed the whole login request under field
+ * names no key list knows: israeli-bank-scrapers' fetchPostWithinPage puts `data: {..."Sisma":"<password>"}`
+ * in its parse-error message. So this removes the credential values themselves (raw, JSON-escaped and
+ * URL-encoded) and every JSON string value, whatever its key, before the usual rules.
+ */
+export function redactScraperError(text: string, secrets: readonly unknown[] = []): string {
+  let out = text;
+  for (const secret of secrets) {
+    // ponytail: values under 4 characters are skipped so a "1" does not shred the message; a real password is longer.
+    if (typeof secret !== "string" || secret.length < 4) continue;
+    for (const form of new Set([secret, JSON.stringify(secret).slice(1, -1), encodeURIComponent(secret)])) {
+      out = out.split(form).join("[redacted]");
+    }
+  }
+  // ponytail: string values only; arrays of strings pass through. Extend if a library ever dumps one.
+  return redact(out.replace(/"((?:[^"\\]|\\.)*)"\s*:\s*"(?:[^"\\]|\\.)*"/g, '"$1":"[redacted]"'));
+}
+
 /** Error -> short, redacted string. Stack traces are dropped: some libraries put request bodies in them. */
 export function redactError(err: unknown): string {
   return redact(err instanceof Error ? `${err.name}: ${err.message}` : String(err));

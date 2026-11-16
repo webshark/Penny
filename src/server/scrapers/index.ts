@@ -11,7 +11,7 @@ import { toScrapeResult } from "./result";
 import { usesScraperFork } from "./select";
 import { preparePage } from "./user-agent";
 import { SYNC_ERRORS } from "@/lib/sync-errors";
-import { redact } from "@/server/lib/redact";
+import { redactScraperError } from "@/server/lib/redact";
 import type { BankProvider } from "@/lib/types";
 import { getWorkspaceSetting } from "../db/queries/settings";
 
@@ -36,11 +36,12 @@ export const PROVIDER_MAP: Record<string, CompanyTypes> = {
   oneZero: CompanyTypes.oneZero,
 };
 
-function sanitizeError(error: unknown): string {
+/** `credentials` are the values this scrape was given, so they can be removed from the library's error text. */
+function sanitizeError(error: unknown, credentials: Record<string, string>): string {
   if (!(error instanceof Error)) {
     return "An unknown error occurred during scraping";
   }
-  return redact(error.message);
+  return redactScraperError(error.message, Object.values(credentials));
 }
 
 /**
@@ -166,7 +167,7 @@ async function runScrape(
     const errorType = result.errorType ?? "GENERIC";
     const friendly = FRIENDLY_ERRORS[errorType];
     const detail = result.errorMessage
-      ? sanitizeError(new Error(result.errorMessage))
+      ? sanitizeError(new Error(result.errorMessage), credentials)
       : errorType;
     console.error(`[scraper] failed (${errorType}):`, detail);
     return {
@@ -223,7 +224,7 @@ export async function scrapeBank(
       lastError = error;
       console.error(
         `[scraper] unexpected error on attempt ${attempt}:`,
-        sanitizeError(error)
+        sanitizeError(error, credentials)
       );
       const { retryable } = classifyError(error);
       if (!retryable || attempt === MAX_ATTEMPTS) break;
@@ -234,7 +235,7 @@ export async function scrapeBank(
   }
 
   const { friendly } = classifyError(lastError);
-  const detail = sanitizeError(lastError);
+  const detail = sanitizeError(lastError, credentials);
   return {
     success: false,
     accounts: [],
