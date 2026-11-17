@@ -143,6 +143,17 @@ async function runScrape(
       ? ForkCompanyTypes.Isracard
       : ForkCompanyTypes.Max;
 
+  const options = {
+    companyId,
+    startDate,
+    combineInstallments: false,
+    showBrowser,
+    // Verbose logs include URLs and posted payloads (incl. credentials), so never enable them.
+    verbose: false,
+    timeout: 60000,
+    args: chromiumArgs,
+    preparePage,
+  };
   const result = forkCompany
     ? await createForkScraper({
         companyId: forkCompany,
@@ -151,17 +162,10 @@ async function runScrape(
         shouldShowBrowser: showBrowser,
         timeout: 60000,
       }).scrape(credentials as never)
-    : await createScraper({
-        companyId,
-        startDate,
-        combineInstallments: false,
-        showBrowser,
-        // Verbose logs include URLs and posted payloads (incl. credentials), so never enable them.
-        verbose: false,
-        timeout: 60000,
-        args: chromiumArgs,
-        preparePage,
-      }).scrape(credentials as never);
+    : provider === "leumi"
+      ? // Leumi's business logins land on a new site the library does not know. Loaded only when needed.
+        await (await import("./leumi-digital-scraper")).createLeumiScraper(options).scrape(credentials as never)
+      : await createScraper(options).scrape(credentials as never);
 
   if (!result.success) {
     const errorType = result.errorType ?? "GENERIC";
