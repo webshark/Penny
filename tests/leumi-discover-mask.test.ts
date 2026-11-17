@@ -71,4 +71,13 @@ describe("leumi discovery masking", () => {
     expect(maskKey("123-456789")).toBe("~999-999999");
     expect(maskTitle("לאומי עסקים - חשבון 12345678")).toBe("לאומי עסקים - חשבון 99999999");
   });
+  it("keeps which currency and which page, and still no amount or number", () => {
+    const shape = shapeOf({ currencyCode: "840", currency: "USD", foreignAccountType: 105, amountInCurrency: 512, currencyRate: 3.71, maskedNumber: "12345/67 840", accountCurrencyName: "דולר ארה\"ב" });
+    expect(shape).toMatchObject({ currencyCode: "string:840", currency: "string:USD", foreignAccountType: "number:105", accountCurrencyName: "string:דולר ארה\"ב" });
+    expect(JSON.stringify([shape.amountInCurrency, shape.currencyRate, shape.maskedNumber])).not.toMatch(/512|3\.71|12345|840/);
+    const url = maskUrl("https://bank.example/_next/data/AbCdEf123456XyZ/he/foreign-accounts/foreign-transactions.json?accountIndex=3&currencyCode=978&q=QWxhZGRpbjpvcGVuIHNlc2FtZQ");
+    expect(url.path).toBe("/_next/data/AaAaAa999999AaA/he/foreign-accounts/foreign-transactions.json");
+    expect(url.query).toMatchObject({ accountIndex: "3", currencyCode: "978" });
+    expect(url.query?.q).not.toContain("QWxh");
+  });
 });

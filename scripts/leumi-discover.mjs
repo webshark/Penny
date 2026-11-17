@@ -253,10 +253,10 @@ Leumi discovery. A browser window is opening.
 
   1. Sign in yourself in that window, as you normally would. This script does not type or read
      what you enter, and records nothing but addresses during sign-in.
-  2. Open the shekel current account transactions (עובר ושב שקלים).
-  3. Switch to your other account in the account picker, and wait for its transactions.
-  4. Choose a custom date range (for example last month) and display it.
-  5. Come back here and press Enter.
+  2. Open the transactions page of each account you want covered: shekel (עובר ושב שקלים) and
+     each foreign-currency account (מט"ח). Wait for the transactions to show.
+  3. On each of those pages, choose a custom date range (for example the last 3 months) and display it.
+  4. Come back here and press Enter.
 
 If the site shows an error or refuses the sign-in, press Enter anyway: that result is useful too.
 Capturing to ${outFile}

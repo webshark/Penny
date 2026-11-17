@@ -54,6 +54,12 @@ export function merge(a, b) {
 // Switches a request sends (true, false, null, a 1-2 digit number such as periodType=1) are kept as they are.
 const SMALL = /^(true|false|null|\d{1,2})$/;
 
+// Which currency a row or account is in is not personal, and a scraper cannot do without it: these fields keep
+// their value when it is short. An amount never ends in Code / Name / Symbol, so none can slip through.
+const CODE_KEY = /^(currency|ccy|foreignAccountType)$|currency(Code|Name|Symbol|Desc\w*|Id)$/i;
+const isCode = (k, v) =>
+  CODE_KEY.test(k) && ((typeof v === "string" && v.length <= 20 && !/\d{4,}/.test(v)) || (Number.isInteger(v) && Math.abs(v) < 1000));
+
 /**
  * JSON value -> its shape, with every leaf masked. Arrays collapse to one merged item shape.
  * `keepSmall` is for requests the site sends: their switches are what a scraper has to reproduce.
@@ -71,7 +77,7 @@ export function shapeOf(v, depth = 0, keepSmall = false) {
   const out = {};
   for (const [k, x] of Object.entries(v)) {
     const key = maskKey(k);
-    const s = shapeOf(x, depth + 1, keepSmall);
+    const s = isCode(k, x) ? `${typeof x}:${x}` : shapeOf(x, depth + 1, keepSmall);
     out[key] = key in out ? merge(out[key], s) : s;
   }
   return out;
@@ -112,6 +118,8 @@ export function typesOnly(v, depth = 0) {
 function maskSegment(s) {
   let d = s;
   try { d = decodeURIComponent(s); } catch { /* keep the raw text */ }
+  // Lower-case words joined by hyphens ("foreign-transactions.json") are a page name however long; a token is not.
+  if (/^[a-z]+(-[a-z]+)+(\.[a-z]{2,4})?$/.test(d) && d.length <= 60) return d;
   return /\d{4,}/.test(d) || d.length >= 24 || /[^\x21-\x7E]/.test(d) ? maskText(d) : d;
 }
 
@@ -138,7 +146,7 @@ export function maskUrl(u) {
   try { url = new URL(u); } catch { return { invalid: true }; }
   const out = { host: url.host, path: url.pathname.split("/").map(maskSegment).join("/") };
   const query = {};
-  for (const [k, v] of url.searchParams) query[maskKey(k)] = SMALL.test(v) ? v : maskText(v);
+  for (const [k, v] of url.searchParams) query[maskKey(k)] = SMALL.test(v) || isCode(k, v) ? v : maskText(v);
   if (Object.keys(query).length) out.query = query;
   if (url.hash.length > 1) out.hash = maskHash(url.hash);
   return out;
