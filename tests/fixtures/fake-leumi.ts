@@ -10,8 +10,18 @@ export interface FakeLeumiOptions {
   routeHeader?: "constant" | "perRoute";
   /** "unique": an x-message-id may be used once. "repeat": only ids the site's own code sent are accepted. */
   messageIds?: "unique" | "repeat";
-  /** false: every accountIndex answers with account 1, which a scraper must notice. */
-  indexSelects?: boolean;
+  /** false: every accountIndex answers with the first account of its kind, which a scraper must notice.
+   *  "foreign": only foreign accounts do that. */
+  indexSelects?: boolean | "foreign";
+  /** true: there are foreign-currency accounts. Like the capture: two clients, the first with USD and EUR, the
+   *  second with USD; the page's list has one entry per client (both USD) and only the by-client answer has all. */
+  foreign?: boolean;
+  /** true: both foreign accounts answer with one IBAN, as one account per currency may. */
+  fxSharedIban?: boolean;
+  /** An account with no rows at all. Like the real bank, it answers "204 No Content" instead of an empty list. */
+  emptyAccount?: number;
+  /** true: like the real site with a date filter on, switching foreign accounts sends a date-range request. */
+  siteSendsByDates?: boolean;
   /** false: submitting the sign-in form goes nowhere. */
   signInWorks?: boolean;
   /** true: every date-range answer claims there are more rows, whatever it returned. */
@@ -48,6 +58,12 @@ export function fakeRows(accountIndex: number, days = 120): Row[] {
   return rows;
 }
 
+export const FAKE_FX = [
+  { accountIndex: 3, client: "A", currencyCode: "001", currencyName: "דולר", number: "900-555555/01", balanceIncludingToday: 1500.5, balanceIncludingTodayILS: 5551.85, iban: "IL000000000000000000003" },
+  { accountIndex: 4, client: "A", currencyCode: "049", currencyName: "אירו", number: "900-555555/01", balanceIncludingToday: 210, balanceIncludingTodayILS: 850.5, iban: "IL000000000000000000004" },
+  { accountIndex: 5, client: "B", currencyCode: "001", currencyName: "דולר", number: "900-777777/02", balanceIncludingToday: 75, balanceIncludingTodayILS: 277.5, iban: "IL000000000000000000005" },
+];
+
 export const FAKE_ACCOUNTS = [
   { accountIndex: 1, maskedNumber: "900-11111/22", balanceIncludingToday: 4321.5, iban: "IL000000000000000000001" },
   { accountIndex: 2, maskedNumber: "900-333333/44", balanceIncludingToday: -77.25, iban: "IL000000000000000000002" },
@@ -68,10 +84,11 @@ const LOGON = html(`
     });
   </script>`);
 
-const app = (routeHeader: string, pageIgnoresAccount: boolean) => html(`
+const app = (routeHeader: string, pageIgnoresAccount: boolean, siteSendsByDates: boolean) => html(`
   <script>
     const base = "/v1/corp/ui-corp-transactions/";
-    let token = "", listed = false;
+    const fx = "/v1/corp/ui-corp-transactions-fx/";
+    let token = "", listed = false, fxListed = false, fxFirst = "";
     const headers = (route) => ({
       accept: "application/json", authorization: "Bearer " + token, route_app_name: ${JSON.stringify(routeHeader)} === "perRoute" ? route : "digitalfront",
       "x-message-id": crypto.randomUUID(), "x-transaction-id": crypto.randomUUID(), "x-session-id": "fake-session", "x-app-id": "digitalfront", "x-uid": "fake-uid",
@@ -85,6 +102,25 @@ const app = (routeHeader: string, pageIgnoresAccount: boolean) => html(`
     // and an address it does not know is loaded from the server, which has no such page.
     setTimeout(() => { window.next = { router: { basePath: "/staticcontent/digitalfront", push: async (to) => {
       const url = new URL(to, location.origin);
+      if (url.pathname === "/he/foreign-accounts/foreign-transactions/") {
+        const asked = url.searchParams.get("accountIndex");
+        history.pushState({}, "", "/staticcontent/digitalfront" + url.pathname + (asked ? "?accountIndex=" + asked : ""));
+        token = (await (await fetch("/fake/token")).json()).token;
+        if (!fxListed) {
+          fxListed = true;
+          const list = await (await fetch(fx + "transactionsavailableaccountsforeign/digitalfront/available-accounts/foreign?comboMethod=false", { headers: headers("transactionsavailableaccountsforeign") })).json();
+          fxFirst = String(list.accountsItems[0]?.accountIndex ?? "");
+          if (fxFirst) fetch(fx + "foreignaccountsbyclient/digitalfront/accounts/foreignaccountsbyclient/" + fxFirst, { headers: headers("foreignaccountsbyclient") });
+        }
+        if (!fxFirst) return;
+        const index = ${pageIgnoresAccount} ? fxFirst : asked || fxFirst;
+        if (asked && ${siteSendsByDates}) {
+          fetch(fx + "foreigntransactionsbydates/digitalfront/accounts/" + index + "/foreigntransactions/bydates?periodType=1&fromDate=20200101&toDate=20200131", { headers: headers("foreigntransactionsbydates") });
+        } else {
+          fetch(fx + "foreigntransactionsdefault/digitalfront/accounts/" + index + "/foreigntransactions/default?operationMode=1", { headers: headers("foreigntransactionsdefault") });
+        }
+        return;
+      }
       if (url.pathname !== "/he/nis-accounts/nis-transactions/") { location.href = "/staticcontent/digitalfront" + url.pathname; return; }
       const index = ${pageIgnoresAccount} ? "1" : url.searchParams.get("accountIndex") || "1";
       history.pushState({}, "", "/staticcontent/digitalfront" + url.pathname + "?accountIndex=" + index);
@@ -96,6 +132,8 @@ const app = (routeHeader: string, pageIgnoresAccount: boolean) => html(`
 
 export async function startFakeLeumi(options: FakeLeumiOptions = {}) {
   const { routeHeader = "constant", messageIds = "unique", indexSelects = true, signInWorks = true, flagAlways = false, pageIgnoresAccount = false, rangeSkipsToday = false } = options;
+  const { foreign = false, fxSharedIban = false, siteSendsByDates = false, emptyAccount } = options;
+  const fxAccounts = foreign ? FAKE_FX : [];
   let token = "";
   const seenIds = new Set<string>();
   const siteIds = new Set<string>();
@@ -112,11 +150,11 @@ export async function startFakeLeumi(options: FakeLeumiOptions = {}) {
     if (p === "/authenticate/logon") return send(200, LOGON, "text/html; charset=utf-8");
     if (p === "/api/v2/auth/login") return send(signInWorks ? 200 : 403, {});
     if (p === "/authenticate") return send(200, {});
-    if (p === "/staticcontent/digitalfront/he/") return send(200, app(routeHeader, pageIgnoresAccount), "text/html; charset=utf-8");
+    if (p === "/staticcontent/digitalfront/he/") return send(200, app(routeHeader, pageIgnoresAccount, siteSendsByDates), "text/html; charset=utf-8");
     if (p.startsWith("/v1/corp/ui-corp-home-page/")) return send(200, { ok: true });
     if (p === "/fake/token") { token = `fake-token-${Math.random().toString(36).slice(2)}`; return send(200, { token }); }
 
-    const api = /^\/v1\/corp\/ui-corp-transactions\/([^/]+)\/digitalfront\/(.*)$/.exec(p);
+    const api = /^\/v1\/corp\/ui-corp-transactions(?:-fx)?\/([^/]+)\/digitalfront\/(.*)$/.exec(p);
     if (!api) return send(404, {});
     const [, route, rest] = api;
     const h = req.headers;
@@ -139,19 +177,38 @@ export async function startFakeLeumi(options: FakeLeumiOptions = {}) {
     if (rest === "available-accounts/ils") {
       return send(200, { comboActualMethod: 1, accountsItems: FAKE_ACCOUNTS.map(({ accountIndex, maskedNumber, balanceIncludingToday }) => ({ accountIndex, maskedNumber, balanceIncludingToday })) });
     }
-    const trx = /^accounts\/(\d+)\/transactions\/(default|bydates)$/.exec(rest);
+    if (rest === "available-accounts/foreign") {
+      const perClient = fxAccounts.filter((a, i) => fxAccounts.findIndex((b) => b.client === a.client) === i);
+      return send(200, { comboActualMethod: 1, accountsItems: perClient.map(({ accountIndex, balanceIncludingToday }) => ({ accountIndex, currencyCode: "001", balanceIncludingToday })) });
+    }
+    const byClient = /^accounts\/foreignaccountsbyclient\/(\d+)$/.exec(rest);
+    if (byClient) {
+      const client = fxAccounts.find((a) => a.accountIndex === Number(byClient[1]))?.client;
+      const accounts = fxAccounts.filter((a) => a.client === client);
+      return send(200, { accountsByClients: [{ foreignAccounts: accounts.map((a) => ({ index: a.accountIndex, currencyCode: a.currencyCode, currencyName: a.currencyName, MaskedFXWithoutType: a.number, balanceIncludingTodayILS: a.balanceIncludingTodayILS })) }] });
+    }
+    const trx = /^accounts\/(\d+)\/(transactions|foreigntransactions)\/(default|bydates)$/.exec(rest);
     if (!trx) return send(404, {});
-    const account = FAKE_ACCOUNTS.find((a) => a.accountIndex === (indexSelects ? Number(trx[1]) : 1));
+    const asked = Number(trx[1]);
+    const first = asked >= 3 ? 3 : 1;
+    const selected = indexSelects === true || (indexSelects === "foreign" && asked < 3) ? asked : first;
+    const account = [...FAKE_ACCOUNTS, ...fxAccounts].find((a) => a.accountIndex === selected);
     if (!account) return send(404, {});
+    if (account.accountIndex === emptyAccount) { res.writeHead(204); return res.end(); }
     let rows = fakeRows(account.accountIndex);
-    if (trx[2] === "bydates") {
+    if (trx[3] === "bydates") {
       const day = (s: string | null) => `${s?.slice(0, 4)}-${s?.slice(4, 6)}-${s?.slice(6, 8)}`;
       const from = day(url.searchParams.get("fromDate"));
       const to = day(url.searchParams.get("toDate"));
       const today = dayString(new Date());
       rows = rows.filter((r) => r.date.slice(0, 10) >= from && r.date.slice(0, 10) <= to && !(rangeSkipsToday && r.date.slice(0, 10) === today));
     }
-    send(200, { additionalTransactionsFlag: flagAlways ? trx[2] === "bydates" : rows.length > CAP, iban: account.iban, currentAccountReference: `ref-${account.accountIndex}`, historyILSTrxItems: rows.slice(0, CAP), isFilterIncludeToday: true });
+    const page = rows.slice(0, CAP);
+    const listed = trx[2] === "foreigntransactions"
+      ? { historyForeignTrxItems: page.map(({ extendedDescription, ...r }) => ({ ...r, extendedDescription1: extendedDescription })) }
+      : { historyILSTrxItems: page };
+    const iban = fxSharedIban && account.accountIndex >= 3 ? "IL000000000000000000099" : account.iban;
+    send(200, { additionalTransactionsFlag: flagAlways ? trx[3] === "bydates" : rows.length > CAP, iban, currentAccountReference: `ref-${iban}`, ...listed, isFilterIncludeToday: true });
   });
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

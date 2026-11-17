@@ -10,6 +10,7 @@ import { listRules } from "@/server/db/queries/rules";
 import { applyRules } from "@/server/rules/engine";
 import { fxMarkup, type FxCharge } from "@/lib/fx-markup";
 import { dailyRates } from "@/server/insights/fx-rates";
+import { isBankProvider } from "@/server/lib/transfers";
 import { getAssetsPayload } from "@/server/markets/portfolio";
 import { liquidCash } from "@/lib/allocation";
 import { getAppSettings } from "@/server/db/queries/settings";
@@ -51,16 +52,18 @@ export async function GET(request: Request) {
     .filter((r) => !applyRules({ description: r.description, chargedAmount: 0, accountNumber: "" }, merchantRules))
     .map(({ merchant, categoryId, categoryName, count }) => ({ merchant, categoryId, categoryName, count }));
 
-  // Installment rows are excluded: their shekel charge is a slice of the foreign amount.
+  // Installment rows are excluded: their shekel charge is a slice of the foreign amount. So are bank rows: a
+  // foreign-currency account's shekel amount is Penny's own conversion at the market rate, not a card's charge.
   const fxCharges = db
     .prepare(
-      `SELECT date, original_currency as currency, original_amount as original, charged_amount as charged
+      `SELECT date, original_currency as currency, original_amount as original, charged_amount as charged, provider
        FROM transactions
        WHERE workspace_id = ? AND date >= ? AND status = 'completed' AND is_excluded = 0 AND kind = 'expense'
          AND original_currency IS NOT NULL AND original_currency != 'ILS' AND COALESCE(charged_currency, 'ILS') = 'ILS'
          AND COALESCE(installment_total, 1) <= 1`
     )
     .all(ws, since)
+    .filter((r) => !isBankProvider((r as { provider: string }).provider))
     .map((r) => ({ ...(r as FxCharge), date: israelDay((r as FxCharge).date) }));
   const fx = fxCharges.length ? fxMarkup(fxCharges, await dailyRates([...new Set(fxCharges.map((c) => c.currency))], today)) : null;
 

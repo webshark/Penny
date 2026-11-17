@@ -3,10 +3,11 @@ import "server-only";
 import type { DailyRates } from "@/lib/fx-markup";
 
 // shortcut: in-memory, per process, refreshed once a day; move to quotes_cache if restarts make it refetch too often.
-const cache = new Map<string, { day: string; closes: DailyRates[string] }>();
+const cache = new Map<string, { day: string; closes: DailyRates[string]; failedAt?: number }>();
+const RETRY_AFTER_MS = 10 * 60_000;
 
 async function fetchDaily(currency: string) {
-  const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${currency}ILS=X?range=1y&interval=1d`, {
+  const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${currency}ILS=X?range=2y&interval=1d`, {
     headers: { "User-Agent": "Mozilla/5.0" },
     signal: AbortSignal.timeout(5000),
   });
@@ -29,10 +30,12 @@ export async function dailyRates(currencies: string[], today: string): Promise<D
       .filter((c) => /^[A-Z]{3}$/.test(c) && c !== "ILS")
       .map(async (c) => {
         const hit = cache.get(c);
-        if (hit?.day === today) return void (out[c] = hit.closes);
-        // A failure is cached for the day too, so an offline host doesn't wait on Yahoo with every request.
-        const closes = await fetchDaily(c).catch(() => hit?.closes ?? []);
-        cache.set(c, { day: today, closes });
+        if (hit?.day === today && !(hit.failedAt && Date.now() - hit.failedAt > RETRY_AFTER_MS)) return void (out[c] = hit.closes);
+        // A failure is cached for a while too, so an offline host doesn't wait on Yahoo with every request.
+        // Not for the day: bank syncs convert foreign rows with these, and leave an account out without them.
+        const fresh = await fetchDaily(c).catch(() => null);
+        const closes = fresh ?? hit?.closes ?? [];
+        cache.set(c, fresh ? { day: today, closes } : { day: today, closes, failedAt: Date.now() });
         out[c] = closes;
       })
   );

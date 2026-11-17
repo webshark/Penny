@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountNumberOf, apiHeaders, byDatesUrl, describeHeaders, mapRow, missingFrom, monthChunks, toIso, ymd } from "@/server/scrapers/leumi-digital";
+import { accountNumberOf, apiHeaders, byDatesUrl, dayBefore, describeHeaders, isoCurrency, mapRow, missingFrom, monthChunks, toIso, ymd } from "@/server/scrapers/leumi-digital";
 import { redactScraperError } from "@/server/lib/redact";
 
 const BASE = "https://hb2.bankleumi.co.il/v1/corp/ui-corp-transactions/";
@@ -12,6 +12,14 @@ describe("leumi new site: addresses and headers", () => {
       `${BASE}transactionsbydates/digitalfront/accounts/2/transactions/bydates?periodType=1&fromDate=20260801&toDate=20260831`,
     );
     expect(byDatesUrl(`${BASE}somethingelse/digitalfront/accounts/2/list`, "20260801", "20260831")).toBeNull();
+  });
+
+  it("does the same for a foreign account, from its latest or its date-range address", () => {
+    const FX = "https://hb2.bankleumi.co.il/v1/corp/ui-corp-transactions-fx/";
+    const want = `${FX}foreigntransactionsbydates/digitalfront/accounts/3/foreigntransactions/bydates?periodType=1&fromDate=20260801&toDate=20260831`;
+    expect(byDatesUrl(`${FX}foreigntransactionsdefault/digitalfront/accounts/3/foreigntransactions/default?operationMode=1`, "20260801", "20260831")).toBe(want);
+    expect(byDatesUrl(`${FX}foreigntransactionsbydates/digitalfront/accounts/3/foreigntransactions/bydates?periodType=1&fromDate=20200101&toDate=20200131`, "20260801", "20260831")).toBe(want);
+    expect(byDatesUrl(`${FX}foreignaccountsbyclient/digitalfront/accounts/foreignaccountsbyclient/3`, "20260801", "20260831")).toBeNull();
   });
 
   const sent = {
@@ -102,6 +110,12 @@ describe("leumi new site: dates and rows", () => {
     // Without the bank's id, the reference number, date, amount and text identify a row.
     const plain = { referenceNumber: "9", date: "2026-11-17 00:00:00", amount: 5, description: "x" };
     expect(missingFrom([{ ...plain }], [plain, { ...plain, amount: 6 }], "2026-08-17")).toEqual([{ ...plain, amount: 6 }]);
+  });
+
+  it("maps a foreign row in its own currency, and names currencies the way the site does", () => {
+    expect(mapRow({ date: "2026-11-03 00:00:00", description: "x", extendedDescription1: "שער", amount: 12.5, referenceNumber: "1" }, "USD")).toMatchObject({ originalCurrency: "USD", originalAmount: 12.5, chargedAmount: 12.5, memo: "שער" });
+    expect([isoCurrency("דולר"), isoCurrency(" אירו "), isoCurrency("רובל")]).toEqual(["USD", "EUR", undefined]);
+    expect(dayBefore(new Date(2026, 10, 1).toISOString())).toBe("2026-10-31");
   });
 
   it("writes the account number like the library's Leumi scraper", () => {

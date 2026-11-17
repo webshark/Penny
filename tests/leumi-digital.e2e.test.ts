@@ -6,7 +6,10 @@ import { CompanyTypes } from "israeli-bank-scrapers";
 import { afterEach, describe, expect, it } from "vitest";
 import { LeumiDigitalScraper } from "@/server/scrapers/leumi-digital-scraper";
 import { waitForPostLogin, watchSignIn } from "@/server/scrapers/leumi-digital";
-import { FAKE_ACCOUNTS, fakeRows, startFakeLeumi, type FakeLeumiOptions } from "./fixtures/fake-leumi";
+import { FAKE_ACCOUNTS, FAKE_FX, fakeRows, startFakeLeumi, type FakeLeumiOptions } from "./fixtures/fake-leumi";
+import type { DailyRates } from "@/lib/fx-markup";
+
+const RATES: DailyRates = { USD: [{ date: "2000-01-03", close: 3.5 }], EUR: [{ date: "2000-01-03", close: 4 }] };
 
 const DAYS = 75;
 const startDate = new Date();
@@ -17,7 +20,7 @@ const expectedRows = (accountIndex: number) => fakeRows(accountIndex).filter((r)
 let fake: Awaited<ReturnType<typeof startFakeLeumi>> | undefined;
 afterEach(async () => { await fake?.close(); fake = undefined; });
 
-async function scrape(options: FakeLeumiOptions) {
+async function scrape(options: FakeLeumiOptions, rates: DailyRates = RATES) {
   fake = await startFakeLeumi(options);
   const origin = fake.origin;
   // Only the two addresses differ from production: the library's login steps and everything after run as they are.
@@ -26,6 +29,7 @@ async function scrape(options: FakeLeumiOptions) {
       const real = super.getLoginOptions(credentials);
       return { ...real, loginUrl: `${origin}/he`, checkReadiness: async () => { await this.page.goto(`${origin}/authenticate/logon`); } };
     }
+    protected async exchangeRates() { return rates; } // never Yahoo from a test
   }
   const logs: string[] = [];
   const log = console.log;
@@ -119,4 +123,56 @@ describe.skipIf(process.env.LEUMI_E2E !== "1")("leumi new site, end to end again
       await browser.close();
     }
   }, 60_000);
+  it("adds every foreign account, of every client, in its currency with shekel amounts, after the shekel ones", async () => {
+    // siteSendsByDates: as on the real site, switching foreign accounts sends a date-range request.
+    const { result, logs } = await scrape({ foreign: true, siteSendsByDates: true });
+    expect(result.errorMessage).toBeUndefined();
+    expect(result.accounts?.map((a) => a.accountNumber)).toEqual(["900-11111_22", "900-333333_44", "900-555555_01 USD", "900-555555_01 EUR", "900-777777_02 USD"]);
+    expect(result.accounts?.slice(2).map((a) => a.balance)).toEqual(FAKE_FX.map((a) => a.balanceIncludingTodayILS));
+    for (const [n, fx] of FAKE_FX.entries()) {
+      const rate = fx.currencyName === "אירו" ? 4 : 3.5;
+      const want = expectedRows(fx.accountIndex);
+      const txns = result.accounts![n + 2].txns;
+      expect(txns.map((t) => t.identifier).sort()).toEqual(want.map((r) => r.referenceNumber).sort());
+      const first = txns.find((t) => t.identifier === want[0].referenceNumber)!;
+      expect(first).toMatchObject({ originalAmount: want[0].amount, originalCurrency: rate === 4 ? "EUR" : "USD", chargedAmount: Math.round(want[0].amount * rate * 100) / 100, chargedCurrency: "ILS", memo: want[0].extendedDescription });
+    }
+    // The shekel accounts are untouched by the foreign part.
+    expect(result.accounts?.[0].txns.every((t) => t.originalCurrency === "ILS" && t.chargedAmount === t.originalAmount)).toBe(true);
+    const line = logs.find((l) => l.startsWith("[leumi-digital]")) ?? "";
+    expect(line).toContain("foreign list 2: 3 001, 5 001");
+    expect(line).toContain("by-client 3: 3 001 דולר, 4 049 אירו");
+    expect(line).toContain("by-client 5: 5 001 דולר"); // asked by the scraper: the site only asked about the first client
+    expect(line).toContain("foreign route foreigntransactions+default/bydates, taken from the site's latest request");
+    expect(line).toContain("EUR account: ");
+  }, 240_000);
+
+  it("accepts foreign accounts that share an IBAN when their rows differ", async () => {
+    const { result, logs } = await scrape({ foreign: true, fxSharedIban: true });
+    expect(result.errorMessage).toBeUndefined();
+    expect(result.accounts).toHaveLength(5);
+    expect(logs.join("\n")).toContain("accounts 3 and 4 share an account reference but no rows");
+  }, 240_000);
+
+  it("skips a foreign account that answers with another's rows, and keeps the rest", async () => {
+    const { result, logs } = await scrape({ foreign: true, fxSharedIban: true, indexSelects: "foreign" });
+    expect(result.errorMessage).toBeUndefined();
+    expect(result.accounts?.map((a) => a.accountNumber)).toEqual(["900-11111_22", "900-333333_44", "900-555555_01 USD"]);
+    expect(logs.join("\n")).toContain("account 4: skipped, accounts 3 and 4 returned the same account");
+  }, 240_000);
+
+  it("keeps the shekel accounts when there is no exchange rate", async () => {
+    const { result, logs } = await scrape({ foreign: true }, {});
+    expect(result.errorMessage).toBeUndefined();
+    expect(result.accounts?.map((a) => a.accountNumber)).toEqual(["900-11111_22", "900-333333_44"]);
+    expect(logs.join("\n")).toMatch(/EUR account skipped: no EUR rate for \d+ of \d+ rows/);
+  }, 240_000);
+  it("keeps a foreign account with no rows, which the bank answers with 204, even at a built address", async () => {
+    const { result, logs } = await scrape({ foreign: true, emptyAccount: 4, pageIgnoresAccount: true });
+    expect(result.errorMessage).toBeUndefined();
+    const eur = result.accounts?.find((a) => a.accountNumber === "900-555555_01 EUR");
+    expect(eur).toMatchObject({ balance: 850.5, txns: [] });
+    expect(result.accounts).toHaveLength(5);
+    expect(logs.join("\n")).toContain("account 4: no rows in the window");
+  }, 240_000);
 });

@@ -5,34 +5,51 @@
 //   - the data API refuses a request that carries only the session cookie; it needs the headers the
 //     site's own code sends (a session token and a dozen x-... ones), so this reuses them;
 //   - the site opens an account with ?accountIndex=N and then asks for .../accounts/N/transactions/default;
-//   - a date range is .../accounts/N/transactions/bydates?periodType=1&fromDate=YYYYMMDD&toDate=YYYYMMDD.
+//   - a date range is .../accounts/N/transactions/bydates?periodType=1&fromDate=YYYYMMDD&toDate=YYYYMMDD;
+//   - foreign-currency accounts mirror this under ui-corp-transactions-fx (.../foreigntransactions/...), on their
+//     own page. Its account list has one entry per client (both said USD in the capture); a client's accounts,
+//     one per currency, with names, numbers and shekel balances, are in its foreignaccountsbyclient answer.
+// Foreign accounts are fetched after the shekel ones and are best effort: one that fails is skipped and said so
+// in the log, so it never costs the shekel rows. (A sync fetches the whole window again, so it is not lost.)
 // The rule here is complete-or-fail: a range the site cuts short is split, and anything that cannot be
 // fetched in full throws, so a sync never saves part of the history as if it were all of it.
 import { randomUUID } from "node:crypto";
 import type { HTTPRequest, HTTPResponse, Page } from "puppeteer";
 
 export const DIGITAL_URL = /\/staticcontent\/digitalfront\//i;
-const TRANSACTIONS_PAGE = "/nis-accounts/nis-transactions";
+const NIS_PAGE = "/nis-accounts/nis-transactions";
+const FX_PAGE = "/foreign-accounts/foreign-transactions";
 const INVALID_PASSWORD_MSG = "אחד או יותר מפרטי ההזדהות שמסרת שגויים. ניתן לנסות שוב"; // same text the library waits for
-const SERVICE = "ui-corp-transactions";
-const TRX_API = `/v1/corp/${SERVICE}/`;
-const DEFAULT_URL = /^(.*\/v1\/corp\/ui-corp-transactions\/)transactionsdefault(\/[^/]+\/accounts\/)(\d+)\/transactions\/default(?:\?.*)?$/;
+const SERVICE = /^ui-corp-transactions(-fx)?$/;
+const TRX_API = /\/v1\/corp\/ui-corp-transactions(-fx)?\//;
+// The site's own request for an account's rows: .../<service>/<list>default|bydates/<app>/accounts/N/<list>/default|bydates.
+// Shekel: transactionsdefault + /transactions/default. Foreign: the same with "foreign" in front (the capture masked
+// those route names, but their lengths fit). When the site switches accounts with a date filter on, it sends bydates.
+const SITE_URL = /^(.*\/v1\/corp\/ui-corp-transactions(?:-fx)?\/)([a-z]+?)(?:default|bydates)(\/[^/]+\/accounts\/)(\d+)\/([a-z]+)\/(?:default|bydates)(?:\?.*)?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Headers the site adds to its API calls. The browser adds cookies and the rest itself.
 const FORWARD = /^(accept|authorization|route_app_name|x-[a-z0-9_-]+)$/;
 const PER_REQUEST = new Set(["x-message-id", "x-transaction-id"]);
 
-interface DigitalAccount { accountIndex?: number; maskedNumber?: string; balanceIncludingToday?: number }
-interface DigitalRow { transactionID?: string; date?: string; description?: string; extendedDescription?: string; amount?: number; referenceNumber?: string }
-interface DigitalRows { additionalTransactionsFlag?: boolean; iban?: string; currentAccountReference?: string; historyILSTrxItems?: DigitalRow[] }
+interface DigitalAccount {
+  accountIndex?: number;
+  maskedNumber?: string;
+  balanceIncludingToday?: number;
+  currencyCode?: string; // foreign list only, for the log
+}
+interface DigitalRow { transactionID?: string; date?: string; description?: string; extendedDescription?: string; extendedDescription1?: string; amount?: number; referenceNumber?: string }
+interface DigitalRows { additionalTransactionsFlag?: boolean; iban?: string; currentAccountReference?: string; historyILSTrxItems?: DigitalRow[]; historyForeignTrxItems?: DigitalRow[] }
+const rowsOf = (json: DigitalRows | undefined) => json?.historyILSTrxItems ?? json?.historyForeignTrxItems;
 interface Txn {
   type: "normal";
   identifier?: string;
   date: string;
   processedDate: string;
   originalAmount: number;
-  originalCurrency: "ILS";
+  originalCurrency: string;
   chargedAmount: number;
+  /** Set once a foreign amount has been converted to shekels (leumi-digital-scraper.ts). */
+  chargedCurrency?: string;
   description: string;
   memo: string;
   status: "completed";
@@ -52,14 +69,14 @@ async function until(ready: () => boolean, timeoutMs: number): Promise<boolean> 
   return ready();
 }
 
-/** The address the site used for an account's latest transactions -> the date-range address for that account. */
-export function byDatesUrl(defaultUrl: string, from: string, to: string): string | null {
-  const m = DEFAULT_URL.exec(defaultUrl);
-  return m ? `${m[1]}transactionsbydates${m[2]}${m[3]}/transactions/bydates?periodType=1&fromDate=${from}&toDate=${to}` : null;
+/** An address the site used for an account's rows -> the date-range address for that account. */
+export function byDatesUrl(siteUrl: string, from: string, to: string): string | null {
+  const m = SITE_URL.exec(siteUrl);
+  return m ? `${m[1]}${m[2]}bydates${m[3]}${m[4]}/${m[5]}/bydates?periodType=1&fromDate=${from}&toDate=${to}` : null;
 }
 
-// Where the route name sits in an address: /v1/corp/ui-corp-transactions/<route name>/...
-const routeName = (url: string) => { const s = path(url).split("/"); return s[s.indexOf(SERVICE) + 1] ?? ""; };
+// Where the route name sits in an address: /v1/corp/ui-corp-transactions[-fx]/<route name>/...
+const routeName = (url: string) => { const s = path(url).split("/"); const i = s.findIndex((x) => SERVICE.test(x)); return i < 0 ? "" : s[i + 1] ?? ""; };
 
 /**
  * Headers for our own call, from the ones the site sent to `fromUrl`.
@@ -112,7 +129,7 @@ export function toIso(s: string | undefined): string | null {
 }
 
 /** One row of the site's list -> a transaction, or null when it lacks a date or an amount. */
-export function mapRow(row: DigitalRow): Txn | null {
+export function mapRow(row: DigitalRow, currency = "ILS"): Txn | null {
   const date = toIso(row.date);
   if (!date || typeof row.amount !== "number" || !Number.isFinite(row.amount)) return null;
   return {
@@ -122,16 +139,24 @@ export function mapRow(row: DigitalRow): Txn | null {
     date,
     processedDate: date,
     originalAmount: row.amount,
-    originalCurrency: "ILS",
+    originalCurrency: currency,
     chargedAmount: row.amount,
     description: (row.description ?? "").trim(),
-    memo: (row.extendedDescription ?? "").trim(),
+    memo: (row.extendedDescription ?? row.extendedDescription1 ?? "").trim(),
     status: "completed",
   };
 }
 
 /** "123-45678/90" -> "123-45678_90", the form the library's Leumi scraper has always used. */
 export const accountNumberOf = (masked: string) => masked.replace("/", "_").replace(/[^\d-_]/g, "");
+
+// The site names a foreign account's currency in Hebrew; its own codes ("001", "049") are not ISO ones.
+// ponytail: the common few; another currency's account is skipped and named in the log until added here.
+const CURRENCIES: Record<string, string> = { "דולר": "USD", "דולר ארה\"ב": "USD", "אירו": "EUR", "ליש\"ט": "GBP", "לירה שטרלינג": "GBP", "פרנק שוויצרי": "CHF" };
+export const isoCurrency = (name: string | undefined) => CURRENCIES[(name ?? "").trim()];
+
+/** The calendar day before a stored date, in the same local time toIso read the bank's date in: yyyy-mm-dd. */
+export const dayBefore = (iso: string) => { const d = new Date(iso); return dashed(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1)); };
 
 /** Rows of the site's own list that the date-range result lacks, from `fromDay` (yyyy-mm-dd) on. */
 export function missingFrom(rows: DigitalRow[], siteRows: DigitalRow[], fromDay: string): DigitalRow[] {
@@ -180,36 +205,52 @@ export async function waitForPostLogin(page: Page, signIn: Map<string, number>, 
 }
 
 interface Opened { url: string; headers: Record<string, string>; derived?: boolean }
+interface Wanted { index: number; accountNumber: string; balance?: number; currency: string }
+interface FxEntry { index?: number; currencyCode?: string; currencyName?: string; MaskedFXWithoutType?: string; balanceIncludingTodayILS?: number }
+interface ByClient { accountsByClients?: { foreignAccounts?: FxEntry[] }[] }
+type Mode = "adapted" | "verbatim";
+const BY_CLIENT = /\/accounts\/foreignaccountsbyclient\/(\d+)(?=\?|$)/;
+
+const entriesOf = (json: ByClient) => (json.accountsByClients ?? []).flatMap((c) => c.foreignAccounts ?? []);
+const short = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Leumi new site: /, "").replace(/ \[[\s\S]*$/, "");
+const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : undefined);
 
 /**
- * On the new site, after sign-in: every shekel account with its transactions from `startDate` to today.
+ * On the new site, after sign-in: every shekel account, then every foreign-currency account, with transactions
+ * from `startDate` to today. A foreign account's amounts are still in its own currency (chargedAmount too).
  * `notes` is filled with what happened and is logged on success and included in the error on failure.
  */
 export async function fetchDigitalAccounts(page: Page, startDate: Date, notes: string[]): Promise<DigitalResultAccount[]> {
   let token: string | undefined; // newest session token on the site's own transactions calls, in case it is renewed
-  let accountsJson: { accountsItems?: DigitalAccount[] } | undefined;
+  const lists: Partial<Record<"ils" | "foreign", { accountsItems?: DigitalAccount[] }>> = {};
+  const byClient = new Map<number, FxEntry[]>(); // foreign account asked about -> its client's foreign accounts
+  let byClientAsk: Opened | undefined; // the site's own by-client request, to ask about another client the same way
   let siteCalls = 0;
-  const opened = new Map<number, Opened>(); // account -> the site's own request for its latest transactions
+  const opened = new Map<number, Opened>(); // account -> the site's own request for its rows
   const siteRows = new Map<number, DigitalRow[]>(); // account -> the rows the site itself was shown
   const ours = new Set<string>();
 
   const onRequest = (req: HTTPRequest) => {
     const url = req.url();
-    if (!url.includes(TRX_API) || ours.has(url)) return;
+    if (!TRX_API.test(url) || ours.has(url)) return;
     const headers = req.headers();
     if (!headers.authorization) return;
     token = headers.authorization;
-    const m = DEFAULT_URL.exec(url);
-    if (m) opened.set(Number(m[3]), { url, headers });
+    if (BY_CLIENT.test(url)) byClientAsk = { url, headers };
+    const m = SITE_URL.exec(url);
+    if (m) opened.set(Number(m[4]), { url, headers });
   };
   const onResponse = (res: HTTPResponse) => {
     const url = res.url();
     if (!url.includes("/v1/corp/") || res.status() !== 200 || ours.has(url)) return;
     siteCalls++;
-    if (!url.includes(TRX_API)) return;
-    if (/\/available-accounts\/ils(\?|$)/.test(url)) res.json().then((json) => { accountsJson = json; }, () => {});
-    const m = DEFAULT_URL.exec(url);
-    if (m) res.json().then((json: DigitalRows) => { siteRows.set(Number(m[3]), json.historyILSTrxItems ?? []); }, () => {});
+    if (!TRX_API.test(url)) return;
+    const list = /\/available-accounts\/(ils|foreign)(\?|$)/.exec(url);
+    if (list) res.json().then((json) => { lists[list[1] as "ils" | "foreign"] = json; }, () => {});
+    const asked = BY_CLIENT.exec(url);
+    if (asked) res.json().then((json: ByClient) => { byClient.set(Number(asked[1]), entriesOf(json)); }, () => {});
+    const m = SITE_URL.exec(url);
+    if (m) res.json().then((json: DigitalRows) => { siteRows.set(Number(m[4]), rowsOf(json) ?? []); }, () => {});
   };
   page.on("request", onRequest);
   page.on("response", onResponse);
@@ -218,7 +259,7 @@ export async function fetchDigitalAccounts(page: Page, startDate: Date, notes: s
   // else by one of its own links, and only as a last resort by loading the address afresh.
   // The language ("/he") is part of the site's page addresses. Taken once, from the page the sign-in landed on.
   const lang = /\/staticcontent\/digitalfront(\/[a-z]{2})(?=[/?#]|$)/i.exec(page.url())?.[1] ?? "";
-  const open = (accountIndex?: number): Promise<string> =>
+  const open = (pathname: string, accountIndex?: number): Promise<string> =>
     page.evaluate((pathname, index, lang) => {
       const router = (window as unknown as { next?: { router?: { push?: (to: unknown) => unknown; basePath?: string } } }).next?.router;
       const search = index === undefined ? "" : `?accountIndex=${index}`;
@@ -234,7 +275,131 @@ export async function fetchDigitalAccounts(page: Page, startDate: Date, notes: s
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- this runs in the bank's page, not in Penny
       location.href = `/staticcontent/digitalfront${lang}${pathname}/${search}`;
       return "reload";
-    }, TRANSACTIONS_PAGE, accountIndex, lang).catch(() => "reload"); // a reload ends the script that asked for it
+    }, pathname, accountIndex, lang).catch(() => "reload"); // a reload ends the script that asked for it
+
+  /**
+   * Our own GET with the headers of the site's request `own`: adapted, else verbatim; `state` keeps what worked.
+   * `empty` is the answer to a 204: the bank says "no content" for a date range with no rows in it.
+   */
+  const bankGet = async <T,>(url: string, own: Opened, ok: (json: T | undefined) => boolean, state: { mode?: Mode; calls: number }, what: string, empty?: T): Promise<T | undefined> => {
+    ours.add(url);
+    const adapted = apiHeaders(own.headers, own.url, url, "adapted");
+    const verbatim = apiHeaders(own.headers, own.url, url, "verbatim");
+    const forms = state.mode ? [state.mode] : JSON.stringify(adapted) === JSON.stringify(verbatim) ? ["verbatim" as const] : ["adapted" as const, "verbatim" as const];
+    for (const form of forms) {
+      const headers = { ...(form === "adapted" ? adapted : verbatim), ...(token ? { authorization: token } : {}) };
+      const res = await page.evaluate(async (u, h) => {
+        const r = await fetch(u, { headers: h, credentials: "include" });
+        return { status: r.status, text: await r.text() };
+      }, url, headers);
+      state.calls++;
+      await sleep(400); // unhurried, like a person paging through
+      let json: (T & { fault?: { detail?: { errorcode?: string } } }) | undefined;
+      try { json = JSON.parse(res.text); } catch { /* not json */ }
+      if (res.status === 200 && ok(json)) { state.mode = form; return json; }
+      if (res.status === 204 && empty !== undefined) { state.mode = form; return empty; }
+      notes.push(`${what} (${form} headers) answered ${res.status} ${String(json?.fault?.detail?.errorcode ?? "").slice(0, 60)}`.trim());
+      if (res.status === 401 || res.status === 403) break; // the session is gone: do not keep knocking
+    }
+    return undefined;
+  };
+
+  /** Every row of each account from startDate to today. `strict`: a failure fails the run, else skips the account. */
+  const fetchAccounts = async (wanted: Wanted[], pathname: string, strict: boolean): Promise<DigitalResultAccount[]> => {
+    const state: { mode?: Mode; calls: number } = { calls: 0 }; // which header form the bank accepted, calls per account
+    let cut = 0;
+    const getRows = async (index: number, from: Date, to: Date): Promise<DigitalRows> => {
+      const own = opened.get(index)!;
+      const url = byDatesUrl(own.url, ymd(from), ymd(to));
+      if (!url) throw fail("the site's transactions address is not the expected one", [...notes, path(own.url).replace(/\d{3,}/g, "9")]);
+      const json = await bankGet<DigitalRows>(url, own, (j) => Array.isArray(rowsOf(j)), state, "date-range call", {});
+      if (!json) throw fail("the bank refused the date-range request", notes);
+      return json;
+    };
+
+    // A range the site cuts short (additionalTransactionsFlag) is halved until every part is whole.
+    const rowsBetween = async (index: number, from: Date, to: Date, seenRefs: Set<string>): Promise<DigitalRow[]> => {
+      const json = await getRows(index, from, to);
+      seenRefs.add(json.iban ?? json.currentAccountReference ?? "");
+      const rows = rowsOf(json) ?? [];
+      if (!json.additionalTransactionsFlag) return rows;
+      cut++;
+      const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+      if (days < 1) throw fail(`a single day is marked as having more transactions than the ${rows.length} returned (${cut} of ${state.calls} calls so far were marked that way)`, notes);
+      const mid = day(from, Math.floor(days / 2));
+      return [...(await rowsBetween(index, from, mid, seenRefs)), ...(await rowsBetween(index, day(mid, 1), to, seenRefs))];
+    };
+
+    const result: DigitalResultAccount[] = [];
+    const done: { index: number; ref: string; ids: Set<string> }[] = []; // to prove each account really is a different one
+    for (const account of wanted) {
+      const { index } = account;
+      try {
+        if (!opened.has(index)) {
+          const how = await open(pathname, index);
+          if (!(await until(() => opened.has(index), 30_000))) {
+            const shown = await page.evaluate(() => new URLSearchParams(location.search).get("accountIndex")).catch(() => null);
+            notes.push(`account ${index}: opened by ${how}, but the site asked for no transactions of it (page shows account ${shown ?? "none"}; site asked for ${[...opened.keys()].join(", ") || "none"})`);
+            const other = wanted.map((a) => opened.get(a.index)).find((o) => o && !o.derived);
+            if (!other) throw fail(`the site did not open account ${index}`, notes);
+            // Next best: the address of an account of the same kind the site did open, with this account's
+            // number. Kept only if the bank then answers with a different account (checked below).
+            opened.set(index, { url: other.url.replace(/\/accounts\/\d+\//, `/accounts/${index}/`), headers: other.headers, derived: true });
+            notes.push(`account ${index}: using its address built from another account's`);
+          }
+        }
+        const own = opened.get(index)!;
+        if (done.length === 0) {
+          notes.push(describeHeaders(own.headers, own.url));
+          // The foreign route names were masked in the capture, so say which one the site really used.
+          if (!strict) notes.push(`foreign route ${SITE_URL.exec(own.url)?.[2] ?? "?"}+default/bydates, taken from the site's ${/\/bydates\?/.test(own.url) ? "date-range" : "latest"} request`);
+        }
+
+        const seenRefs = new Set<string>();
+        const rows: DigitalRow[] = [];
+        const chunks = monthChunks(startDate, new Date());
+        state.calls = 0;
+        cut = 0;
+        for (const [from, to] of chunks) rows.push(...(await rowsBetween(index, from, to, seenRefs)));
+
+        seenRefs.delete("");
+        if (seenRefs.size > 1) throw fail(`account ${index} answered with more than one account`, notes);
+        if (seenRefs.size === 0) {
+          // With no rows there is nothing that could be another account's: its balance comes from the account list.
+          if (own.derived && rows.length > 0) throw fail(`account ${index} could not be told apart from the others`, notes);
+          notes.push(`account ${index}: ${rows.length ? "the bank sent no account reference to check against" : "no rows in the window"}`);
+        }
+        const ref = [...seenRefs][0] ?? "";
+        const ids = new Set(rows.flatMap((r) => (r.transactionID ? [r.transactionID] : [])));
+        for (const prev of done) {
+          if (!ref || prev.ref !== ref) continue;
+          // A foreign account per currency may share one IBAN; different accounts still have different rows.
+          if (strict || ids.size === 0 || [...ids].some((id) => prev.ids.has(id))) throw fail(`accounts ${prev.index} and ${index} returned the same account`, notes);
+          notes.push(`accounts ${prev.index} and ${index} share an account reference but no rows`);
+        }
+
+        // The rows the site itself was shown are an independent check: any of them the date-range result lacks
+        // (today's, if the bank leaves those out of a range) are added, and counted in the log.
+        const site = siteRows.get(index);
+        const extra = site ? missingFrom(rows, site, dashed(day(startDate))) : [];
+        rows.push(...extra);
+
+        const txns = rows.map((r) => mapRow(r, account.currency));
+        const bad = txns.filter((t) => t === null).length;
+        if (bad > 0) throw fail(`${bad} of ${rows.length} rows for account ${index} had no date or amount`, notes);
+        done.push({ index, ref, ids });
+        notes.push(
+          `account ${index}: ${rows.length} rows, ${dashed(chunks[0][0])} to ${dashed(chunks.at(-1)![1])}, ${state.calls} calls (${cut} cut short and split), ${state.mode} headers, ` +
+          (site ? `site's own list ${site.length} rows of which ${extra.length} were missing from the date range and added` : "no list from the site to compare with"),
+        );
+        result.push({ accountNumber: account.accountNumber, balance: account.balance, txns: txns as Txn[] });
+      } catch (e) {
+        if (strict) throw e;
+        notes.push(`account ${index}: skipped, ${short(e)}`);
+      }
+    }
+    return result;
+  };
 
   try {
     // The address changes before the site's code has started. Its router and its first calls mean it is up.
@@ -244,113 +409,55 @@ export async function fetchDigitalAccounts(page: Page, startDate: Date, notes: s
     await until(() => siteCalls > 0, 8_000);
     notes.push(`site router ${router ? "ready" : "missing"}, site calls seen ${siteCalls}`);
 
-    notes.push(`opened transactions page by ${await open()}`);
-    if (!(await until(() => accountsJson !== undefined, 15_000))) {
+    notes.push(`opened transactions page by ${await open(NIS_PAGE)}`);
+    if (!(await until(() => lists.ils !== undefined, 15_000))) {
       // The site's own link names an account; in the capture it was accountIndex 1.
-      notes.push(`no account list yet, opened account 1 by ${await open(1)}`);
-      if (!(await until(() => accountsJson !== undefined, 40_000))) throw fail("the account list did not load", [...notes, `page ${path(page.url())}`]);
+      notes.push(`no account list yet, opened account 1 by ${await open(NIS_PAGE, 1)}`);
+      if (!(await until(() => lists.ils !== undefined, 40_000))) throw fail("the account list did not load", [...notes, `page ${path(page.url())}`]);
     }
-    const accounts = (accountsJson?.accountsItems ?? []).filter((a) => typeof a.accountIndex === "number" && a.maskedNumber);
+    const accounts = (lists.ils?.accountsItems ?? []).filter((a) => typeof a.accountIndex === "number" && a.maskedNumber);
     if (accounts.length === 0) throw fail("the account list was empty or in an unknown form", notes);
     notes.push(`accounts ${accounts.length}`);
+    const result = await fetchAccounts(
+      accounts.map((a) => ({ index: a.accountIndex!, accountNumber: accountNumberOf(a.maskedNumber!), balance: num(a.balanceIncludingToday), currency: "ILS" })),
+      NIS_PAGE,
+      true,
+    );
 
-    let mode: "adapted" | "verbatim" | undefined; // which header form the bank accepted
-    let calls = 0;
-    let cut = 0;
-    const getRows = async (index: number, from: Date, to: Date): Promise<DigitalRows> => {
-      const own = opened.get(index)!;
-      const url = byDatesUrl(own.url, ymd(from), ymd(to));
-      if (!url) throw fail("the site's transactions address is not the expected one", [...notes, path(own.url).replace(/\d{3,}/g, "9")]);
-      ours.add(url);
-      const adapted = apiHeaders(own.headers, own.url, url, "adapted");
-      const verbatim = apiHeaders(own.headers, own.url, url, "verbatim");
-      const forms = mode ? [mode] : JSON.stringify(adapted) === JSON.stringify(verbatim) ? ["verbatim" as const] : ["adapted" as const, "verbatim" as const];
-      for (const form of forms) {
-        const headers = { ...(form === "adapted" ? adapted : verbatim), ...(token ? { authorization: token } : {}) };
-        const res = await page.evaluate(async (u, h) => {
-          const r = await fetch(u, { headers: h, credentials: "include" });
-          return { status: r.status, text: await r.text() };
-        }, url, headers);
-        calls++;
-        await sleep(400); // unhurried, like a person paging through
-        let json: (DigitalRows & { fault?: { detail?: { errorcode?: string } } }) | undefined;
-        try { json = JSON.parse(res.text); } catch { /* not json */ }
-        if (res.status === 200 && Array.isArray(json?.historyILSTrxItems)) { mode = form; return json; }
-        notes.push(`date-range call (${form} headers) answered ${res.status} ${String(json?.fault?.detail?.errorcode ?? "").slice(0, 60)}`.trim());
-        if (res.status === 401 || res.status === 403) break; // the session is gone: do not keep knocking
+    try {
+      notes.push(`foreign: opened page by ${await open(FX_PAGE)}`);
+      if (!(await until(() => lists.foreign !== undefined, 20_000))) throw new Error("the foreign account list did not load");
+      const listed = (lists.foreign?.accountsItems ?? []).filter((a) => typeof a.accountIndex === "number");
+      notes.push(`foreign list ${listed.length}: ${listed.map((a) => `${a.accountIndex} ${a.currencyCode ?? "?"}`).join(", ") || "none"}`);
+      if (listed.length) await until(() => byClient.size > 0, 10_000);
+      // The list is one entry per client. A client the site did not ask about is asked about the way it did.
+      const ask = { calls: 0 } as { mode?: Mode; calls: number };
+      for (const a of listed) {
+        if ([...byClient.values()].flat().some((e) => e.index === a.accountIndex)) continue;
+        if (!byClientAsk) { notes.push(`no by-client request from the site to ask about account ${a.accountIndex} with`); break; }
+        const url = byClientAsk.url.replace(BY_CLIENT, `/accounts/foreignaccountsbyclient/${a.accountIndex}`);
+        const json = await bankGet<ByClient>(url, byClientAsk, (j) => Array.isArray(j?.accountsByClients), ask, `by-client call for account ${a.accountIndex}`);
+        if (json) byClient.set(a.accountIndex!, entriesOf(json));
       }
-      throw fail("the bank refused the date-range request", notes);
-    };
+      for (const [asked, entries] of byClient) notes.push(`by-client ${asked}: ${entries.map((e) => `${e.index ?? "?"} ${e.currencyCode ?? "?"} ${e.currencyName ?? "?"}`).join(", ") || "none"}`);
 
-    // A range the site cuts short (additionalTransactionsFlag) is halved until every part is whole.
-    const rowsBetween = async (index: number, from: Date, to: Date, seenRefs: Set<string>): Promise<DigitalRow[]> => {
-      const json = await getRows(index, from, to);
-      seenRefs.add(json.iban ?? json.currentAccountReference ?? "");
-      const rows = json.historyILSTrxItems ?? [];
-      if (!json.additionalTransactionsFlag) return rows;
-      cut++;
-      const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
-      if (days < 1) throw fail(`a single day is marked as having more transactions than the ${rows.length} returned (${cut} of ${calls} calls so far were marked that way)`, notes);
-      const mid = day(from, Math.floor(days / 2));
-      return [...(await rowsBetween(index, from, mid, seenRefs)), ...(await rowsBetween(index, day(mid, 1), to, seenRefs))];
-    };
-
-    const result: DigitalResultAccount[] = [];
-    const refs = new Map<string, number>(); // IBAN -> account, to prove each account really is a different one
-    for (const account of accounts) {
-      const index = account.accountIndex!;
-      if (!opened.has(index)) {
-        const how = await open(index);
-        if (!(await until(() => opened.has(index), 30_000))) {
-          const shown = await page.evaluate(() => new URLSearchParams(location.search).get("accountIndex")).catch(() => null);
-          notes.push(`account ${index}: opened by ${how}, but the site asked for no transactions of it (page shows account ${shown ?? "none"}; site asked for ${[...opened.keys()].join(", ") || "none"})`);
-          const other = [...opened.values()].find((o) => !o.derived);
-          if (!other) throw fail(`the site did not open account ${index}`, notes);
-          // Next best: the address of an account the site did open, with this account's number. Kept only
-          // if the bank then answers with a different account (checked below).
-          opened.set(index, { url: other.url.replace(/\/accounts\/\d+\/transactions\//, `/accounts/${index}/transactions/`), headers: other.headers, derived: true });
-          notes.push(`account ${index}: using its address built from another account's`);
+      const wanted: Wanted[] = [];
+      for (const e of [...byClient.values()].flat()) {
+        if (typeof e.index !== "number" || wanted.some((w) => w.index === e.index)) continue;
+        const currency = isoCurrency(e.currencyName);
+        // The account number is part of every row's dedupe key, so it comes from this one field or not at all.
+        if (!currency || !e.MaskedFXWithoutType) {
+          notes.push(`account ${e.index}: skipped, ${currency ? "the site gave no account number for it" : `currency ${e.currencyName ? `"${e.currencyName}"` : "not named by the site"} (code ${e.currencyCode ?? "none"}) is not one this knows`}`);
+          continue;
         }
+        notes.push(`account ${e.index}: ${currency} (site code ${e.currencyCode ?? "none"})`);
+        // The balance in shekels, as the bank values it: Penny's balances feed cash and net worth in shekels.
+        wanted.push({ index: e.index, accountNumber: `${accountNumberOf(e.MaskedFXWithoutType)} ${currency}`, balance: num(e.balanceIncludingTodayILS), currency });
       }
-      const own = opened.get(index)!;
-      if (result.length === 0) notes.push(describeHeaders(own.headers, own.url));
-
-      const seenRefs = new Set<string>();
-      const rows: DigitalRow[] = [];
-      const chunks = monthChunks(startDate, new Date());
-      calls = 0;
-      cut = 0;
-      for (const [from, to] of chunks) rows.push(...(await rowsBetween(index, from, to, seenRefs)));
-
-      seenRefs.delete("");
-      if (seenRefs.size > 1) throw fail(`account ${index} answered with more than one account`, notes);
-      if (seenRefs.size === 0) {
-        if (own.derived) throw fail(`account ${index} could not be told apart from the others`, notes);
-        notes.push(`account ${index}: the bank sent no account reference to check against`);
-      }
-      for (const ref of seenRefs) {
-        if (refs.has(ref)) throw fail(`accounts ${refs.get(ref)} and ${index} returned the same account`, notes);
-        refs.set(ref, index);
-      }
-
-      // The rows the site itself was shown are an independent check: any of them the date-range result lacks
-      // (today's, if the bank leaves those out of a range) are added, and counted in the log.
-      const site = siteRows.get(index);
-      const extra = site ? missingFrom(rows, site, dashed(day(startDate))) : [];
-      rows.push(...extra);
-
-      const txns = rows.map(mapRow);
-      const bad = txns.filter((t) => t === null).length;
-      if (bad > 0) throw fail(`${bad} of ${rows.length} rows for account ${index} had no date or amount`, notes);
-      notes.push(
-        `account ${index}: ${rows.length} rows, ${dashed(chunks[0][0])} to ${dashed(chunks.at(-1)![1])}, ${calls} calls (${cut} cut short and split), ${mode} headers, ` +
-        (site ? `site's own list ${site.length} rows of which ${extra.length} were missing from the date range and added` : "no list from the site to compare with"),
-      );
-      result.push({
-        accountNumber: accountNumberOf(account.maskedNumber!),
-        balance: typeof account.balanceIncludingToday === "number" ? account.balanceIncludingToday : undefined,
-        txns: txns as Txn[],
-      });
+      if (listed.length && wanted.length === 0) notes.push("no foreign account could be identified");
+      result.push(...(await fetchAccounts(wanted, FX_PAGE, false)));
+    } catch (e) {
+      notes.push(`foreign accounts skipped: ${short(e)}`);
     }
     return result;
   } finally {
