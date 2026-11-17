@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import os from "os";
 import path from "path";
 import fs from "fs";
@@ -8,6 +8,7 @@ let GET: typeof import("@/app/api/integrations/[id]/route").GET;
 
 beforeAll(async () => {
   process.env.PENNY_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "penny-integ-"));
+  vi.spyOn(process, "cwd").mockReturnValue(process.env.PENNY_DATA_DIR); // see tests/app-lock.test.ts: stay out of the real ./data
   const db = (await import("@/server/db/index")).getDb();
   const { saveBankCredentials } = await import("@/server/db/queries/bank-credentials");
   ({ GET } = await import("@/app/api/integrations/[id]/route"));

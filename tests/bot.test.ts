@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import os from "os";
 import path from "path";
 import fs from "fs";
@@ -11,6 +11,7 @@ const deps = () => ({ workspaceId: ws, today: "2026-11-04", runSync: async () =>
 
 beforeAll(async () => {
   process.env.PENNY_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "penny-bot-"));
+  vi.spyOn(process, "cwd").mockReturnValue(process.env.PENNY_DATA_DIR); // see tests/app-lock.test.ts: stay out of the real ./data
   const db = (await import("@/server/db/index")).getDb();
   cmd = await import("@/server/bot/commands");
   const { createSyncRun } = await import("@/server/db/queries/sync-runs");

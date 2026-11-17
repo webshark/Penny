@@ -12,6 +12,9 @@ describe("full wipe", () => {
   it("needs the word, then removes the database, key and logs and starts fresh", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "penny-wipe-"));
     process.env.PENNY_DATA_DIR = dir;
+    // ./data of the working directory is the "legacy" key location. In a checkout that is also a real install
+    // that is the real key, and this suite would copy or shred it. Keep it inside the temp folder.
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
     globalThis.__pennyDataKey = undefined;
     const { getDb } = await import("@/server/db/index");
     const { setGlobalSetting, getGlobalSetting } = await import("@/server/db/queries/settings");

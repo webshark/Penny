@@ -34,6 +34,7 @@ describe("proxy gate for LAN requests", () => {
   beforeEach(() => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "penny-lan-"));
     process.env.PENNY_DATA_DIR = dataDir;
+    vi.spyOn(process, "cwd").mockReturnValue(dataDir); // see tests/app-lock.test.ts: stay out of the real ./data
     vi.resetModules();
     globalThis.__pennyDataKey = undefined;
     globalThis.__pennySessions = undefined;

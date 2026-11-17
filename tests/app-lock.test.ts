@@ -19,6 +19,9 @@ async function fresh() {
 beforeEach(() => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "penny-lock-"));
   process.env.PENNY_DATA_DIR = dataDir;
+  // ./data of the working directory is the "legacy" key location. In a checkout that is also a real install
+  // that is the real key, and this suite would copy or shred it. Keep it inside the temp folder.
+  vi.spyOn(process, "cwd").mockReturnValue(dataDir);
 });
 
 describe("app lock and key wrapping", () => {
