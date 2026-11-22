@@ -5,7 +5,7 @@ import { loadInsights } from "@/server/insights/data";
 import { listPolicies, getPlan } from "@/server/db/queries/plan";
 import { listAssets } from "@/server/db/queries/assets";
 import { getWorkspaceIdFromRequest } from "@/server/lib/workspace-context";
-import { israelDay, toLocalISODate } from "@/server/lib/date-utils";
+import { israelDay, israelToday } from "@/server/lib/date-utils";
 import { listRules } from "@/server/db/queries/rules";
 import { applyRules } from "@/server/rules/engine";
 import { fxMarkup, type FxCharge } from "@/lib/fx-markup";
@@ -15,13 +15,14 @@ import { getAssetsPayload } from "@/server/markets/portfolio";
 import { liquidCash } from "@/lib/allocation";
 import { getAppSettings } from "@/server/db/queries/settings";
 import { detectStageChanges } from "@/lib/stage-detect";
+import { dictionaryCategory } from "@/lib/merchant-dictionary";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const ws = getWorkspaceIdFromRequest(request);
   const db = getDb();
-  const today = toLocalISODate(new Date());
+  const today = israelToday();
   const since = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
   const txns = db
     .prepare(
@@ -81,6 +82,22 @@ export async function GET(request: Request) {
     .all(ws, taxSince) as { m: string }[]).map((r) => r.m);
   const taxYears = taxYearFacts(salaryRows, months, today);
 
+  // Donations per tax year, for the §46 credit: the Donations category, or a donation by name when uncategorized.
+  const donationRows = db
+    .prepare(
+      `SELECT substr(t.date, 1, 4) as year, t.description, -t.charged_amount as amount, c.name as category
+       FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+       WHERE t.workspace_id = ? AND t.date >= ? AND t.kind = 'expense' AND t.status = 'completed' AND t.is_excluded = 0`
+    )
+    .all(ws, taxSince) as { year: string; description: string; amount: number; category: string | null }[];
+  const donationTotals = new Map<number, number>();
+  for (const r of donationRows) {
+    if (r.category === "Donations" || (!r.category && dictionaryCategory(r.description, "expense") === "Donations")) {
+      donationTotals.set(Number(r.year), (donationTotals.get(Number(r.year)) ?? 0) + r.amount);
+    }
+  }
+  const donations = [...donationTotals].map(([year, total]) => ({ year, total: Math.round(total) })).sort((a, b) => a.year - b.year);
+
   const { assets } = await getAssetsPayload(ws);
   const banks = assets.filter((a) => a.source === "bank");
   const liquid = assets.length ? liquidCash(assets) : undefined;
@@ -91,7 +108,7 @@ export async function GET(request: Request) {
   // getAppSettings falls back to an empty household on a missing or corrupt setting.
   const knownEvents = getAppSettings(ws).household.events.map((e) => e.type);
   const stageHints = detectStageChanges(txns, knownEvents, today).filter((h) => !dismissed.has(h.key));
-  return NextResponse.json({ suggestions, dismissed: [...dismissed], stageHints });
+  return NextResponse.json({ suggestions, dismissed: [...dismissed], stageHints, donations });
 }
 
 /** Body: { key } — hides a suggestion for good. */

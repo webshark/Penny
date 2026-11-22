@@ -1,6 +1,7 @@
 import "server-only";
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
+import { roundCents } from "@/lib/money";
 import { isValidOwner, normalizeTag } from "@/lib/tags";
 import { EditError } from "@/server/db/queries/transaction-edits";
 
@@ -10,7 +11,7 @@ export const isManualProvider = (provider: string) => MANUAL_PROVIDERS.includes(
 
 export type ManualInput = {
   kind?: unknown; amount?: unknown; date?: unknown; description?: unknown; categoryId?: unknown;
-  account?: unknown; memo?: unknown; tags?: unknown; owner?: unknown; excluded?: unknown;
+  account?: unknown; memo?: unknown; tags?: unknown; owner?: unknown; excluded?: unknown; businessSharePct?: unknown;
 };
 type Row = { id: number; provider: string; kind: string; account_number: string };
 
@@ -18,7 +19,7 @@ const MAX_AMOUNT = 10_000_000;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 function check(db: Database.Database, ws: number, body: ManualInput, memberIds: string[]) {
-  const out: { kind?: "expense" | "income"; amount?: number; date?: string; description?: string; categoryId?: number | null; account?: string; memo?: string | null; tags?: string[]; owner?: string | null; excluded?: boolean } = {};
+  const out: { kind?: "expense" | "income"; amount?: number; date?: string; description?: string; categoryId?: number | null; account?: string; memo?: string | null; tags?: string[]; owner?: string | null; excluded?: boolean; businessSharePct?: number } = {};
   if (body.kind !== undefined) {
     if (body.kind !== "expense" && body.kind !== "income") throw new EditError("kind must be expense or income");
     out.kind = body.kind;
@@ -26,7 +27,7 @@ function check(db: Database.Database, ws: number, body: ManualInput, memberIds: 
   if (body.amount !== undefined) {
     const a = body.amount;
     if (typeof a !== "number" || !Number.isFinite(a) || a <= 0 || a > MAX_AMOUNT) throw new EditError("amount must be between 0 and 10,000,000");
-    out.amount = Math.round(a * 100) / 100;
+    out.amount = roundCents(a);
     if (out.amount === 0) throw new EditError("amount must be at least 0.01");
   }
   if (body.date !== undefined) {
@@ -68,6 +69,11 @@ function check(db: Database.Database, ws: number, body: ManualInput, memberIds: 
     if (typeof body.excluded !== "boolean") throw new EditError("excluded must be true or false");
     out.excluded = body.excluded;
   }
+  if (body.businessSharePct !== undefined) {
+    const n = body.businessSharePct;
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 0 || n > 100) throw new EditError("business share must be a whole percentage from 0 to 100");
+    out.businessSharePct = n;
+  }
   return out;
 }
 
@@ -101,10 +107,10 @@ export function createManualTransaction(db: Database.Database, ws: number, body:
     const credential = account === "cash" ? null : ((db.prepare("SELECT credential_id AS c FROM transactions WHERE workspace_id=? AND account_number=? AND credential_id IS NOT NULL LIMIT 1").get(ws, account) as { c: number } | undefined)?.c ?? null);
     const id = Number(db.prepare(
       `INSERT INTO transactions (workspace_id, account_number, date, processed_date, original_amount, original_currency, charged_amount, charged_currency,
-         description, memo, type, status, provider, credential_id, sync_run_id, dedup_hash, kind, owner, category_id, category_source, is_excluded)
-       VALUES (?, ?, ?, ?, ?, 'ILS', ?, 'ILS', ?, ?, 'normal', 'completed', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         description, memo, type, status, provider, credential_id, sync_run_id, dedup_hash, kind, owner, category_id, category_source, is_excluded, business_share_pct)
+       VALUES (?, ?, ?, ?, ?, 'ILS', ?, 'ILS', ?, ?, 'normal', 'completed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(ws, account, f.date, f.date, signed, signed, f.description, f.memo ?? null, provider, credential, placeholderRun(db, ws, provider),
-      `${provider}:${randomUUID()}`, f.kind, f.owner ?? null, f.categoryId ?? null, f.categoryId == null ? null : "user", f.excluded ? 1 : 0).lastInsertRowid);
+      `${provider}:${randomUUID()}`, f.kind, f.owner ?? null, f.categoryId ?? null, f.categoryId == null ? null : "user", f.excluded ? 1 : 0, f.businessSharePct ?? 0).lastInsertRowid);
     if (f.tags?.length) setTags(db, ws, id, f.tags);
     return id;
   })();
@@ -131,6 +137,7 @@ export function updateTransactionFields(db: Database.Database, ws: number, id: n
     if (f.memo !== undefined) put("memo=?", f.memo);
     if (f.owner !== undefined) put("owner=?", f.owner);
     if (f.excluded !== undefined) put("is_excluded=?", f.excluded ? 1 : 0);
+    if (f.businessSharePct !== undefined) put("business_share_pct=?", f.businessSharePct);
     if (f.categoryId !== undefined) { put("category_id=?", f.categoryId); put("category_source=?", f.categoryId == null ? null : "user"); put("needs_review=?", 0); }
     if (f.kind !== undefined) put("kind=?", f.kind);
     if (f.date !== undefined) { put("date=?", f.date); put("processed_date=?", f.date); }
@@ -149,7 +156,7 @@ export function updateTransactionFields(db: Database.Database, ws: number, id: n
 /** Deletes a manual row and returns what is needed to re-create it (undo). Bank rows cannot be deleted: they would come back on the next sync. */
 export function deleteManualTransaction(db: Database.Database, ws: number, id: number) {
   const row = db.prepare(
-    `SELECT provider, kind, ABS(charged_amount) AS amount, substr(date,1,10) AS date, description, category_id AS categoryId, account_number AS account, memo, owner, is_excluded AS excluded
+    `SELECT provider, kind, ABS(charged_amount) AS amount, substr(date,1,10) AS date, description, category_id AS categoryId, account_number AS account, memo, owner, is_excluded AS excluded, business_share_pct AS businessSharePct
      FROM transactions WHERE workspace_id=? AND id=?`
   ).get(ws, id) as { provider: string; excluded: number; [k: string]: unknown } | undefined;
   if (!row) throw new EditError("Transaction not found", 404);

@@ -9,6 +9,8 @@ import {
 import { getWorkspaceIdFromRequest } from "@/server/lib/workspace-context";
 import type { CategoryKind } from "@/lib/types";
 
+import { errorResponse } from "@/server/lib/api-error";
+
 export async function GET(request: Request) {
   const workspaceId = getWorkspaceIdFromRequest(request);
   const { searchParams } = new URL(request.url);
@@ -59,7 +61,7 @@ export async function POST(request: Request) {
   }
   if (getCategoryByName(workspaceId, name)) {
     return NextResponse.json(
-      { error: "a category with this name already exists" },
+      { error: "a category with this name already exists", code: "duplicate-name" },
       { status: 409 }
     );
   }
@@ -103,10 +105,10 @@ export async function POST(request: Request) {
     const msg = err instanceof Error ? err.message : "unknown error";
     if (msg.includes("UNIQUE")) {
       return NextResponse.json(
-        { error: "a category with this name already exists" },
+        { error: "a category with this name already exists", code: "duplicate-name" },
         { status: 409 }
       );
     }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return errorResponse("categories", err);
   }
 }

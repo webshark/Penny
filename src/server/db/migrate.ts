@@ -6,6 +6,8 @@ import path from "path";
 import { CATEGORY_HIERARCHY_MIGRATION, applyCategoryHierarchy } from "./category-hierarchy";
 import { FAMILY_COLORS_MIGRATION, SATURATED_COLORS_MIGRATION, applyFamilyColors } from "./category-colors";
 import { PROFILES_MIGRATION, backupBeforeProfiles, seedProfiles, writeProfilesReport } from "./profiles-migration";
+import { backupBeforeMigration } from "./backup";
+import { israelDay } from "../lib/date-utils";
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 
@@ -42,8 +44,20 @@ export function runMigrations(db: Database.Database): void {
   // Existing install about to get profiles: keep a copy first (fresh installs have nothing to lose).
   const backup = applied.size > 0 && [PROFILES_MIGRATION, "047_household_preferences.sql", CATEGORY_HIERARCHY_MIGRATION, FAMILY_COLORS_MIGRATION, SATURATED_COLORS_MIGRATION, "052_profile_pip.sql", "053_policy_cover.sql"].some((f) => !applied.has(f) && files.includes(f)) ? backupBeforeProfiles(db) : null;
 
-  for (const file of files) {
-    if (applied.has(file)) continue;
+  const pending = files.filter((file) => !applied.has(file));
+  // Migrations rewrite data. A copy first means a failed or destructive migration is recoverable.
+  // The profile migration already wrote its own copy, so only one backup per run.
+  if (pending.length > 0 && !backup) backupBeforeMigration(db, "migration");
+
+  // Surface a corrupt file before migrations touch it instead of after.
+  const check = db.pragma("quick_check", { simple: true });
+  if (check !== "ok") {
+    console.error(
+      `[db] integrity check failed: ${String(check)}. Backups live in the data/backups folder.`
+    );
+  }
+
+  for (const file of pending) {
 
     const sql = fs.readFileSync(path.join(migrationDir, file), "utf-8");
 
@@ -55,12 +69,17 @@ export function runMigrations(db: Database.Database): void {
     db.pragma("foreign_keys = OFF");
     try {
       db.transaction(() => {
+        // BEGIN IMMEDIATE takes the write lock before the re-check, so a second process that opened
+        // the same database while this one was working waits here and then finds the file applied,
+        // instead of re-running an ALTER that would fail with "duplicate column name".
+        if (db.prepare("SELECT 1 FROM _migrations WHERE name = ?").get(file)) return;
         db.exec(sql);
         if (file === CATEGORY_HIERARCHY_MIGRATION) applyCategoryHierarchy(db);
         if (file === "049_goal_details.sql") addGoalDetails(db);
+        if (file === "073_israel_days.sql") toIsraelDays(db);
         if (file === FAMILY_COLORS_MIGRATION || file === SATURATED_COLORS_MIGRATION) applyFamilyColors(db);
         db.prepare("INSERT INTO _migrations (name) VALUES (?)").run(file);
-      })();
+      }).immediate();
 
       const violations = db.pragma("foreign_key_check") as unknown[];
       if (violations.length > 0) {
@@ -78,6 +97,13 @@ export function runMigrations(db: Database.Database): void {
   }
   // Checked on every start, not only with 052: cheap, and it can't be skipped by a server that read the file before this code.
   addProfilePip(db);
+}
+
+/** Rewrites instant-style transaction dates ("…T21:00:00.000Z") as the Israeli calendar day. */
+export function toIsraelDays(db: Database.Database): void {
+  const rows = db.prepare("SELECT id, date, processed_date FROM transactions WHERE date LIKE '%T%' OR processed_date LIKE '%T%'").all() as { id: number; date: string; processed_date: string | null }[];
+  const stmt = db.prepare("UPDATE transactions SET date = ?, processed_date = ? WHERE id = ?");
+  for (const r of rows) stmt.run(israelDay(r.date), r.processed_date ? israelDay(r.processed_date) : r.processed_date, r.id);
 }
 
 /** Idempotent: SQLite has no ADD COLUMN IF NOT EXISTS. */

@@ -1,6 +1,5 @@
 "use client";
 import { useState, useSyncExternalStore } from "react";
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,7 +14,7 @@ import type { Goal } from "@/lib/types";
 const noSubscribe = () => () => {}; // read once per render; this component's own writes go through state
 
 export function GoalFocus() {
-  const locale = useLocale(); const t = useTranslations("goalFocus"); const he = locale === "he"; const title = t("smallStepsMeaningfulGoals");
+  const locale = useLocale(); const t = useTranslations("goalFocus"); const title = t("smallStepsMeaningfulGoals");
   const q = useQuery({ queryKey: ["plan"], queryFn: getPlan }); const qc = useQueryClient();
   const profileId = useActiveProfileId(); // per profile
   const focusKey = `penny.goal-focus.p${profileId ?? "default"}`;

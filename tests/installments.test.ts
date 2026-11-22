@@ -63,4 +63,10 @@ describe("openInstallments", () => {
     expect(out.months).toHaveLength(12);
     expect(out.total).toBe(35 * 100);
   });
+
+  it("treats a first payment an agora apart as the same plan", () => {
+    const base = { merchant: "KSP", account: "4580", total: 3 };
+    const out = projectInstallments([{ ...base, amount: -333.34, number: 1, date: "2026-11-10" }, { ...base, amount: -333.33, number: 2, date: "2026-12-10" }], "2026-12-11");
+    expect(out.map((p) => [p.number, p.amount])).toEqual([[3, 333.33]]);
+  });
 });

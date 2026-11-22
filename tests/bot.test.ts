@@ -79,7 +79,7 @@ describe("handleCommand", () => {
   });
   it("says setup is needed when there is no workspace", async () => {
     const out = await cmd.handleCommand("/month", 42, cfg, { ...deps(), workspaceId: undefined });
-    expect(out).toMatch(/not set up/i);
+    expect(out).toContain("לא מוגדרת");
   });
   it("/sync refuses to start a second sync while one is running", async () => {
     let called = false;
@@ -88,7 +88,7 @@ describe("handleCommand", () => {
       isSyncRunning: () => true,
       runSync: async () => { called = true; return "synced"; },
     });
-    expect(out).toMatch(/already running/i);
+    expect(out).toContain("סנכרון כבר רץ");
     expect(called).toBe(false);
   });
   it("unknown text gets the help list", async () => {

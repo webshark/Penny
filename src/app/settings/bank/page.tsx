@@ -1,24 +1,23 @@
 "use client";
 
-import { Forward } from "@/components/ui/dir-chevron";
 import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SyncActions } from "@/components/layout/sidebar-sync";
 import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import {
-  RefreshCw,
-  Loader2,
-  CircleCheck,
-  CircleAlert,
-  FileUp,
-} from "lucide-react";
+import { RefreshCw, Loader2, CircleCheck, CircleAlert, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { ProviderBadge } from "@/components/setup/provider-badge";
-import { SectionShell, SettingCard, SettingList, SettingRow } from "@/components/settings/section-shell";
-import { StatementImportCard } from "@/components/settings/statement-import-card";
-import { FolderImportCard } from "@/components/settings/folder-import-card";
+import { Segmented } from "@/components/ui/segmented";
+import { SectionShell } from "@/components/settings/section-shell";
+import { InstitutionGrid, InstitutionTile } from "@/components/settings/institution-grid";
+import { ManualImport } from "@/components/settings/manual-import";
+import { ScraperDisclaimer } from "@/components/settings/scraper-disclaimer";
 import { DangerZone, ExcludedMerchantsCard, ShowBrowserCard } from "@/components/settings/data-cards";
+import { ExportCard } from "@/components/settings/export-card";
+import { DiagnosticsCard } from "@/components/settings/diagnostics-card";
+import { AutoBackupCard } from "@/components/settings/auto-backup-card";
+import { BackupCard } from "@/components/settings/backup-card";
 import { WipeCard } from "@/components/settings/wipe-card";
 import { BankDetailSheet } from "@/components/settings/bank-detail-sheet";
 import { useBankSync } from "@/components/settings/use-bank-sync";
@@ -28,12 +27,7 @@ import { translateProviderName, useFormatterLabels } from "@/lib/i18n-data";
 import { formatLastSync } from "@/lib/formatters";
 import type { Integration } from "@/lib/types";
 import { InvestmentHouses } from "@/components/settings/investment-houses";
-
-// The manual path: jump to the import card and open its file picker.
-function pickStatementFile() {
-  document.getElementById("import")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  document.getElementById("statement-file")?.click();
-}
+import { OpenBankingCard } from "@/components/settings/open-banking-card";
 
 interface SheetState {
   open: boolean;
@@ -42,16 +36,28 @@ interface SheetState {
   credentialId: number | null;
 }
 
+/** Open banking first, then the scraper, then a file. */
+type Mode = "openBanking" | "auto" | "manual";
+
 export default function BankSettingsPage() {
   const t = useTranslations("settings.bank");
   const tBanks = useTranslations("banks");
   const labels = useFormatterLabels();
   const locale = useLocale();
+  const params = useSearchParams();
+  // Three lanes: an API, a scraper that keeps itself current, or a one-off file snapshot.
+  const [mode, setMode] = useState<Mode>(() => {
+    const requested = params.get("mode");
+    return requested === "auto" || requested === "manual" ? requested : "openBanking";
+  });
 
   const { data: integrations = [], isPending, isError, refetch } = useQuery({
     queryKey: ["integrations"],
     queryFn: listIntegrations,
   });
+  const openBanking = integrations.find((i) => i.provider === "openBanking") ?? null;
+  // Each tab owns its own connections; an open banking account is not a scraped one.
+  const scraped = integrations.filter((i) => i.provider !== "openBanking");
   const { start, stateFor } = useBankSync();
   const [sheet, setSheet] = useState<SheetState>({
     open: false,
@@ -68,179 +74,170 @@ export default function BankSettingsPage() {
     return stamps.sort().slice(-1)[0];
   }, [integrations]);
 
-  const availableToAdd = BANK_PROVIDERS.filter((b) => b.enabled);
+  // Open banking has its own tab, so it never shows up as a bank to scrape.
+  const availableToAdd = BANK_PROVIDERS.filter((b) => b.enabled && b.id !== "openBanking");
 
   const sheetIntegration: Integration | null =
     sheet.mode === "edit" && sheet.credentialId != null
       ? integrations.find((i) => i.id === sheet.credentialId) ?? null
       : null;
 
+  // Count only the scraped connections: open banking lives in its own tab and is not in this list.
   const countLabel =
-    integrations.length === 1
-      ? t("banksConnectedOne", { count: integrations.length })
-      : t("banksConnectedOther", { count: integrations.length });
+    scraped.length === 1
+      ? t("banksConnectedOne", { count: scraped.length })
+      : t("banksConnectedOther", { count: scraped.length });
 
   return (
     <>
-      <SectionShell title={t("title")} description={t("description")}>
-        {/* Two ways in for every account: connect it, or bring a file. */}
-        <SettingCard title={t("waysTitle")}>
-          <SettingList>
-            <SettingRow label={t("autoLabel")} hint={t("autoHint")}>
-              <Button variant="outline" size="sm" onClick={() => document.getElementById("connect")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{t("autoCta")}</Button>
-            </SettingRow>
-            <SettingRow label={t("manualLabel")} hint={t("manualHint")}>
-              <Button variant="outline" size="sm" onClick={pickStatementFile}><FileUp className="size-4" aria-hidden />{t("manualCta")}</Button>
-            </SettingRow>
-          </SettingList>
-        </SettingCard>
-
-        <div id="connect" className="flex scroll-mt-20 flex-wrap items-center justify-between gap-2">
-          <div className="px-4 text-footnote text-muted-foreground">
-            {!isPending && !isError && countLabel}
-            {lastSync ? (
-              <>
-                {" · "}
-                <span className="text-foreground/80">
-                  {t("lastSync", { time: formatLastSync(lastSync, labels) })}
-                </span>
-              </>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <Suspense fallback={null}><SyncActions /></Suspense>
-          </div>
+      <SectionShell title={t("title")} description={t("description")} icon={<Landmark aria-hidden />}>
+        <div className="space-y-2 px-4">
+          <Segmented<Mode>
+            label={t("modeLabel")}
+            value={mode}
+            onChange={setMode}
+            variant="track"
+            options={[
+              { value: "openBanking", label: t("modeOpenBanking") },
+              { value: "auto", label: t("modeAuto") },
+              { value: "manual", label: t("modeManual") },
+            ]}
+          />
+          {/* What the picked way actually does, so the choice is made on facts rather than a label. */}
+          <p aria-live="polite" className="text-footnote leading-5 text-muted-foreground">
+            {t(mode === "openBanking" ? "modeOpenBankingHint" : mode === "auto" ? "modeAutoHint" : "modeManualHint")}
+          </p>
         </div>
 
-        {isPending ? <p role="status">{t("loading")}</p> : isError ? <div role="alert"><p>{t("loadFailed")}</p><Button variant="outline" className="mt-3" onClick={() => void refetch()}>{t("retry")}</Button></div> : integrations.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            {t.rich("noneConnectedPrompt", {
-              addBankBold: (chunks) => <b>{chunks}</b>,
-            })}
-          </div>
+        {mode === "openBanking" ? (
+          <OpenBankingCard
+            connected={openBanking}
+            onOpen={() =>
+              setSheet({
+                open: true,
+                mode: "edit",
+                providerId: "openBanking",
+                credentialId: openBanking?.id ?? null,
+              })
+            }
+          />
+        ) : mode === "manual" ? (
+          <ManualImport />
         ) : (
-          <section aria-labelledby="banks-connected">
-          <h3 id="banks-connected" className="mb-2 px-4 text-sm font-semibold text-muted-foreground">{t("groupConnected", { count: integrations.length })}</h3>
-          <div className="overflow-hidden rounded-2xl bg-card">
-            <ul className="divide-y divide-border/60">
-              {[...integrations].sort((x, y) => x.label.localeCompare(y.label, locale)).map((integration) => {
-                const info = BANK_PROVIDERS.find(
-                  (b) => b.id === integration.provider
-                );
-                if (!info) return null;
-                const sync = stateFor(integration.id);
-                const localName = translateProviderName(info.id, info.name, tBanks);
-                const openSheet = () =>
-                  setSheet({
-                    open: true,
-                    mode: "edit",
-                    providerId: integration.provider,
-                    credentialId: integration.id,
-                  });
-                const subline = integration.lastSyncAt
-                  ? t("transactionsCountWithSync", {
-                      count: integration.transactionCount,
-                      time: formatLastSync(integration.lastSyncAt, labels),
-                    })
-                  : t("transactionsCountNever", {
-                      count: integration.transactionCount,
-                    });
-                return (
-                  <li
-                    key={integration.id}
-                    className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
-                  >
-                    <button
-                      type="button"
-                      onClick={openSheet}
-                      aria-label={t("openDetails", {
-                        name: `${integration.label} (${localName})`,
-                      })}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-start"
-                    >
-                      <ProviderBadge
-                        color={info.color}
-                        name={localName}
-                        domain={info.domain}
-                        size={36}
-                        radius={9}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                          {integration.label}
-                          <StatusPill
-                            lastSyncAt={integration.lastSyncAt}
-                            syncing={sync.syncing}
-                          />
-                        </div>
-                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {localName}
-                          {" · "}
-                          {t(info.kind === "bank" ? "kindBank" : "kindCard")}
-                          {" · "}
-                          {subline}
-                        </div>
-                      </div>
-                    </button>
-                    <SyncShortButton
-                      syncing={sync.syncing}
-                      stage={sync.stage}
-                      onClick={() => start(integration.id)}
-                    />
-                    <button
-                      type="button"
-                      onClick={openSheet}
-                      aria-label={t("openDetails", {
-                        name: `${integration.label} (${localName})`,
-                      })}
-                      className="-me-1 shrink-0 rounded-md p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground"
-                    >
-                      <Forward />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          </section>
-        )}
-        {/* Every provider we can read, connected or not, so nothing is hidden in a menu. */}
-        {!isPending && !isError && (() => {
-          const connected = new Set(integrations.map((i) => i.provider));
-          const rest = availableToAdd.filter((b) => !connected.has(b.id));
-          const groups = (["bank", "card"] as const).map((kind) => ({ kind, items: rest.filter((b) => b.kind === kind).sort((x, y) => translateProviderName(x.id, x.name, tBanks).localeCompare(translateProviderName(y.id, y.name, tBanks), locale)) })).filter((g) => g.items.length);
-          return groups.length > 0 && (
-            <>
-              {groups.map((g) => (
-                <section key={g.kind} aria-labelledby={`not-connected-${g.kind}`}>
-                  <h3 id={`not-connected-${g.kind}`} className="mb-2 px-4 text-sm font-semibold text-muted-foreground">{t(g.kind === "bank" ? "groupBanks" : "groupCards")}</h3>
-                  <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl bg-card">
-                    {g.items.map((b) => {
-                      const name = translateProviderName(b.id, b.name, tBanks);
-                      return (
-                        <li key={b.id} className="flex items-center gap-3 px-4 py-3">
-                          <ProviderBadge color={b.color} name={name} domain={b.domain} size={36} radius={9} />
-                          <span title={name} className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
-                          <Button variant="outline" size="sm" onClick={() => setSheet({ open: true, mode: "add", providerId: b.id, credentialId: null })}>{t("connect")}</Button>
-                          <IconButton label={t("importFor", { name })} className="shrink-0 text-muted-foreground" onClick={pickStatementFile}><FileUp className="size-4" aria-hidden /></IconButton>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              ))}
-            </>
-          );
-        })()}
-        <InvestmentHouses />
+          <>
+            <ScraperDisclaimer />
 
-        <section id="import" aria-label={t("groupImport")} className="scroll-mt-20 space-y-7">
-          <StatementImportCard />
-          <FolderImportCard />
-        </section>
+            <div id="connect" className="flex scroll-mt-20 flex-wrap items-center justify-between gap-2">
+              <div className="px-4 text-footnote text-muted-foreground">
+                {!isPending && !isError && countLabel}
+                {lastSync ? (
+                  <>
+                    {" · "}
+                    <span className="text-foreground/80">
+                      {t("lastSync", { time: formatLastSync(lastSync, labels) })}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Suspense fallback={null}><SyncActions /></Suspense>
+              </div>
+            </div>
+
+            {isPending ? <p role="status">{t("loading")}</p> : isError ? <div role="alert"><p>{t("loadFailed")}</p><Button variant="outline" className="mt-3" onClick={() => void refetch()}>{t("retry")}</Button></div> : scraped.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+                {t.rich("noneConnectedPrompt", {
+                  addBankBold: (chunks) => <b>{chunks}</b>,
+                })}
+              </div>
+            ) : (
+              <section aria-labelledby="banks-connected" className="space-y-3">
+              <h3 id="banks-connected" className="mb-2 px-4 text-sm font-semibold text-muted-foreground">{t("groupConnected", { count: scraped.length })}</h3>
+              <InstitutionGrid>
+                  {[...scraped].sort((x, y) => x.label.localeCompare(y.label, locale)).map((integration) => {
+                    const info = BANK_PROVIDERS.find(
+                      (b) => b.id === integration.provider
+                    );
+                    if (!info) return null;
+                    const sync = stateFor(integration.id);
+                    const localName = translateProviderName(info.id, info.name, tBanks);
+                    const openSheet = () =>
+                      setSheet({
+                        open: true,
+                        mode: "edit",
+                        providerId: integration.provider,
+                        credentialId: integration.id,
+                      });
+                    const subline = integration.lastSyncAt
+                      ? t("transactionsCountWithSync", {
+                          count: integration.transactionCount,
+                          time: formatLastSync(integration.lastSyncAt, labels),
+                        })
+                      : t("transactionsCountNever", {
+                          count: integration.transactionCount,
+                        });
+                    return (
+                      <InstitutionTile
+                        key={integration.id}
+                        label={integration.label}
+                        color={info.color}
+                        domain={info.domain}
+                        labelFor={t("openDetails", { name: `${integration.label} (${localName})` })}
+                        onClick={openSheet}
+                        subline={`${localName} · ${t(info.kind === "bank" ? "kindBank" : "kindCard")} · ${subline}`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <StatusPill lastSyncAt={integration.lastSyncAt} syncing={sync.syncing} />
+                          <SyncShortButton syncing={sync.syncing} stage={sync.stage} onClick={() => start(integration.id)} />
+                        </div>
+                      </InstitutionTile>
+                    );
+                  })}
+              </InstitutionGrid>
+              </section>
+            )}
+            {/* Every provider we can read, connected or not, so nothing is hidden in a menu. */}
+            {!isPending && !isError && (() => {
+              const connected = new Set(integrations.map((i) => i.provider));
+              const rest = availableToAdd.filter((b) => !connected.has(b.id));
+              const groups = (["bank", "card"] as const).map((kind) => ({ kind, items: rest.filter((b) => b.kind === kind).sort((x, y) => translateProviderName(x.id, x.name, tBanks).localeCompare(translateProviderName(y.id, y.name, tBanks), locale)) })).filter((g) => g.items.length);
+              return groups.length > 0 && (
+                <>
+                  {groups.map((g) => (
+                    <section key={g.kind} aria-labelledby={`not-connected-${g.kind}`} className="space-y-3">
+                      <h3 id={`not-connected-${g.kind}`} className="mb-2 px-4 text-sm font-semibold text-muted-foreground">{t(g.kind === "bank" ? "groupBanks" : "groupCards")}</h3>
+                      <InstitutionGrid>
+                        {g.items.map((b) => {
+                          const name = translateProviderName(b.id, b.name, tBanks);
+                          return (
+                            <InstitutionTile
+                              key={b.id}
+                              label={name}
+                              color={b.color}
+                              domain={b.domain}
+                              labelFor={`${t("connect")} · ${name}`}
+                              onClick={() => setSheet({ open: true, mode: "add", providerId: b.id, credentialId: null })}
+                            >
+                              <Button variant="outline" size="sm" aria-label={`${t("connect")} · ${name}`} onClick={() => setSheet({ open: true, mode: "add", providerId: b.id, credentialId: null })}>{t("connect")}</Button>
+                            </InstitutionTile>
+                          );
+                        })}
+                      </InstitutionGrid>
+                    </section>
+                  ))}
+                </>
+              );
+            })()}
+            <InvestmentHouses />
+          </>
+        )}
 
         <section aria-labelledby="data-heading" className="space-y-7 border-t border-border/60 pt-6">
           <h2 id="data-heading" className="px-4 text-lg font-semibold">{t("groupData")}</h2>
+          <ExportCard />
+          <DiagnosticsCard />
+          <BackupCard />
+          <AutoBackupCard />
           <ExcludedMerchantsCard />
           <ShowBrowserCard />
           {/* The one place to delete data; Privacy links here. */}
@@ -310,8 +307,15 @@ function SyncShortButton({
       </span>
     );
   }
+  // The word plus the status pill is wider than a two-column tile on a 320px phone, so the label
+  // only appears from md up; on a phone it stays the accessible name and the hover tooltip.
   return (
-    <IconButton showLabel label={t("syncShort")} className="shrink-0" onClick={onClick}>
+    <IconButton
+      label={t("syncShort")}
+      showLabel
+      className="shrink-0 px-3 [&>span]:hidden md:px-5 md:[&>span]:inline"
+      onClick={onClick}
+    >
       <RefreshCw className="size-4" aria-hidden />
     </IconButton>
   );

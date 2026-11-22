@@ -16,7 +16,10 @@ const eslintConfig = defineConfig([
     ".claude/**",
     ".playwright-mcp/**",
     "dist-desktop/**",
+    ".std/**",
   ]),
+  // A leading underscore marks a value dropped on purpose.
+  { rules: { "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" }] } },
   // Electron entry points are CommonJS by design.
   { files: ["**/*.cjs"], rules: { "@typescript-eslint/no-require-imports": "off" } },
 ]);

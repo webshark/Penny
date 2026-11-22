@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatLastSync, formatJerusalemTimeOfDay } from "@/lib/formatters";
@@ -20,6 +21,8 @@ interface Props {
   onOpenChange?: (open: boolean) => void;
   /** Show the status in words next to the dot (open sidebar); the dot alone when the sidebar is collapsed. */
   labelled?: boolean;
+  /** A refresh icon with a short age ("23h") instead of the sentence; the sentence stays in the tooltip. */
+  compact?: boolean;
 }
 
 type PillTone = "ok" | "warn" | "error" | "muted" | "active";
@@ -28,6 +31,8 @@ interface PillState {
   tone: PillTone;
   label: string;
   detail: string | null;
+  /** Oldest last sync (UTC, no zone), for the compact age. */
+  since?: string | null;
 }
 
 const TONE_STYLES: Record<PillTone, { dot: string; text: string; ring: string; pulse: boolean }> = {
@@ -87,13 +92,8 @@ function useTick(active: boolean): void {
   }, [active]);
 }
 
-export function SyncStatusPill({
-  items,
-  nextScheduledSync,
-  activity,
-  onOpenChange,
-  labelled,
-}: Props) {
+/** The sync status in words and tone: the pill's tooltip, and the line in the profile menu. */
+export function useSyncState(items: HomeBankHealthItem[] | null, activity: ActivitySnapshot | null) {
   const tPill = useTranslations("syncPill");
   const tBanks = useTranslations("banks");
   const fmtLabels = useFormatterLabels();
@@ -141,6 +141,7 @@ export function SyncStatusPill({
       return {
         tone: "warn",
         label: tPill("lastSyncRelative", { time: formatLastSync(oldestSync, fmtLabels) }),
+        since: oldestSync,
         detail: staleItems
           .map((s) => translateProviderName(s.provider, s.providerName, tBanks))
           .join(", "),
@@ -151,6 +152,7 @@ export function SyncStatusPill({
       tone: "ok",
       label: tPill("syncedRelative", { time: formatLastSync(oldestSync, fmtLabels) }),
       detail: null,
+      since: oldestSync,
     };
   }, [items, tPill, tBanks, fmtLabels]);
 
@@ -169,6 +171,31 @@ export function SyncStatusPill({
   }
 
   const styles = TONE_STYLES[state.tone];
+  return { state, styles };
+}
+
+export function SyncStatusPill({
+  items,
+  nextScheduledSync,
+  activity,
+  onOpenChange,
+  labelled,
+  compact,
+}: Props) {
+  const locale = useLocale();
+  // A minute clock for the compact age, so render stays pure.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(id); }, []);
+  const tPill = useTranslations("syncPill");
+  const syncActive = activity?.sync.active === true;
+  const { state, styles } = useSyncState(items, activity);
+  // "23 ש׳" / "23h": the age of the oldest sync, in the largest unit that fits.
+  const age = (since: string | null | undefined) => {
+    if (!since) return null;
+    const mins = Math.max(0, (now - new Date(since + "Z").getTime()) / 60_000);
+    const [n, unit] = mins < 60 ? [Math.round(mins), "minute"] : mins < 1440 ? [Math.round(mins / 60), "hour"] : [Math.round(mins / 1440), "day"];
+    return new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "narrow" }).format(n);
+  };
 
   const nextText = nextScheduledSync
     ? tPill("nextScheduled", { time: formatJerusalemTimeOfDay(nextScheduledSync) })
@@ -186,7 +213,9 @@ export function SyncStatusPill({
                   type="button"
                   aria-label={tooltipText}
                   className={cn(
-                    labelled
+                    compact
+                      ? "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      : labelled
                       ? "flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-start text-sm transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                       : "inline-flex size-11 items-center justify-center rounded-full transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     styles.text
@@ -196,11 +225,16 @@ export function SyncStatusPill({
             />
           }
         >
-          <span
+          {compact ? <>
+            <RefreshCw aria-hidden className={cn("size-4 shrink-0", styles.pulse && "motion-safe:animate-spin")} />
+            {age(state.since) && <span aria-hidden className="text-xs font-medium tabular-nums">{age(state.since)}</span>}
+            <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", styles.dot)} />
+            <span className="sr-only">{tooltipText}</span>
+          </> : <span
             aria-hidden
             className={cn("size-2 shrink-0 rounded-full", styles.dot, styles.pulse && "animate-pulse")}
-          />
-          {labelled
+          />}
+          {compact ? null : labelled
             ? <span className="min-w-0 flex-1 truncate text-sidebar-foreground group-data-[collapsible=icon]:sr-only">{state.label}</span>
             : <span className="sr-only">{tooltipText}</span>}
         </TooltipTrigger>

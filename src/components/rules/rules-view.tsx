@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { IconButton } from "@/components/ui/icon-button";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ListFilter } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { SectionShell, SettingCard } from "@/components/settings/section-shell";
 import { Input } from "@/components/ui/input";
@@ -112,7 +112,7 @@ export function RulesView() {
   };
 
   return (
-    <SectionShell title={t("title")} description={t("description")}>
+    <SectionShell title={t("title")} description={t("description")} icon={<ListFilter aria-hidden />}>
       <SettingCard title={t("add")}>
           <form onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">

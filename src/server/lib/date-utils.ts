@@ -62,7 +62,7 @@ export function israelToday(now: Date = new Date()): string {
   return israelFormat.format(now);
 }
 
-/** Israeli calendar day of a stored date. Scrapers store UTC instants, so Israeli midnight reads as 21:00/22:00Z the day before. */
+/** Israeli calendar day of a date or instant. Scrapers send UTC instants (Israeli midnight reads as 21:00/22:00Z the day before); transactions are stored as the day this returns. */
 export function israelDay(value: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const d = new Date(value);

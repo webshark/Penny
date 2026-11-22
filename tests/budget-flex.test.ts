@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyMoves, moveTarget, parseMoves, roomToMove } from "@/lib/budget-moves";
+import { moveTarget, parseMoves, roomToMove } from "@/lib/budget-moves";
 import { percentile, smoothIncome, variesALot } from "@/lib/smoothing";
 import { monthlyToClear, overdraftCost, overdraftDepth, shouldShowOverdraft } from "@/lib/overdraft";
 import type { CategoryWithData } from "@/lib/types";
@@ -17,15 +17,6 @@ describe("budget moves", () => {
     expect(parseMoves({ "2026-11": [{ from: 1, to: 2, amount: 50 }, { from: 1, to: 1, amount: 5 }, { from: 1, to: 2, amount: -3 }], bad: [] }))
       .toEqual({ "2026-11": [{ from: 1, to: 2, amount: 50 }] });
     expect(parseMoves(null)).toEqual({});
-  });
-
-  it("moves budget and recomputes status, rollup parent follows children", () => {
-    const rows = [row(1, 500, 600, { parentId: 9 }), row(2, 1000, 200), row(9, 500, 600, { isParent: true, budgetSource: "rollup" })];
-    const out = applyMoves(rows, [{ from: 2, to: 1, amount: 100 }], 50);
-    expect(out[0]).toMatchObject({ budget: 600, remaining: 0, status: "heads-up" });
-    expect(out[1]).toMatchObject({ budget: 900, remaining: 700 });
-    expect(out[2].budget).toBe(600);
-    expect(applyMoves(rows, [], 50)).toBe(rows);
   });
 
   it("lists room most-first and skips rollup parents", () => {

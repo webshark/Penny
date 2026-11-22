@@ -204,9 +204,9 @@ export function CalculatorView({ slug }: { slug: CalcSlug }) {
       <div className="mt-6 rounded-2xl bg-primary/8 p-4 sm:p-5" aria-live="polite">
         <p className="text-title font-semibold text-pretty tabular-nums">{t(out.head[0], out.head[1])}</p>
         {out.rows.length > 0 && (
-          <dl className="mt-3 divide-y divide-border/60 text-footnote tabular-nums">
+          <dl className="row-grid mt-3 text-footnote tabular-nums">
             {out.rows.map(([k, val]) => (
-              <div key={k} className="flex items-baseline justify-between gap-3 py-2 last:pb-0">
+              <div key={k} className="flex items-baseline justify-between gap-3 py-2">
                 <dt className="text-muted-foreground">{t(`r_${k}`)}</dt>
                 <dd className="font-semibold" dir="ltr">{val}</dd>
               </div>

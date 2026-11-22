@@ -3,7 +3,7 @@ import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { Inter, Geist_Mono, Rubik } from "next/font/google";
 import { getLocale, getMessages } from "next-intl/server";
 import { cookies } from "next/headers";
-import { SidebarRoot } from "@/components/layout/app-shell";
+import { PersistentShell, SidebarRoot } from "@/components/layout/app-shell";
 import { I18nProvider } from "@/i18n/client-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { StudioProvider } from "@/components/studio-provider";
@@ -39,7 +39,9 @@ export const metadata: Metadata = {
   description: "Personal finance tracker with AI-powered categorization",
   applicationName: "Penny",
   appleWebApp: { capable: true, title: "Penny", statusBarStyle: "default" },
-  icons: { apple: "/icons/apple-touch-icon.png" },
+  // Declaring `icons` replaces the file-based icon.svg link, so name it here too:
+  // without it the tab has no icon and every load asks for /favicon.ico (404).
+  icons: { icon: "/icon.svg", apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
@@ -74,7 +76,7 @@ export default async function RootLayout({
         {/* Applies the saved studio theme before first paint, so a refresh never flashes another theme. Mirrors StudioProvider. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var p=JSON.parse(localStorage.getItem("shekel.budget-studio.v1")||"null");if(p){var r=document.documentElement,t=p.theme==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"midnight":"pearl"):p.theme;localStorage.setItem("theme",p.theme==="system"?"system":t==="midnight"?"dark":"light");r.classList.add("app-studio");r.classList.toggle("dark",t==="midnight");r.style.colorScheme=t==="midnight"?"dark":"light";r.dataset.studioTheme=t;r.dataset.studioAccent=p.accent;r.dataset.studioDensity=p.density;r.dataset.studioMotion=String(p.motion);r.dataset.studioCustom=String(!!p.customColor);if(p.customColor)r.style.setProperty("--custom-primary",p.customColor)}}catch(e){}`,
+            __html: `try{var p=JSON.parse(localStorage.getItem("shekel.budget-studio.v1")||"null");if(p){var r=document.documentElement,t=p.theme==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"midnight":"pearl"):(p.theme==="midnight"?"midnight":"pearl");localStorage.setItem("theme",p.theme==="system"?"system":t==="midnight"?"dark":"light");r.classList.add("app-studio");r.classList.toggle("dark",t==="midnight");r.style.colorScheme=t==="midnight"?"dark":"light";r.dataset.studioTheme=t;r.dataset.studioAccent="violet";r.dataset.studioDensity=p.density;r.dataset.studioMotion=String(p.motion);r.dataset.studioCustom="false"}}catch(e){}`,
           }}
         />
         {/* Accessibility menu choices, before first paint (mirrors A11yProvider). */}
@@ -87,7 +89,7 @@ export default async function RootLayout({
             <QueryProvider>
               <TooltipProvider>
                 <A11yProvider>
-                <SidebarRoot defaultOpen={sidebarOpen}>{children}</SidebarRoot>
+                <SidebarRoot defaultOpen={sidebarOpen}><PersistentShell>{children}</PersistentShell></SidebarRoot>
                 </A11yProvider>
                 <Toaster />
                 <ServiceWorkerRegister />

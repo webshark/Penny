@@ -61,7 +61,7 @@ export function OverdraftCard({ subscriptionsMonthly }: { subscriptionsMonthly: 
             <li>{t("stepSavings")}</li>
             <li>
               {subscriptionsMonthly > 0 ? t("stepSubscriptions", { amount: money(subscriptionsMonthly) }) : t("stepSubscriptionsNone")}{" "}
-              <a href="/overview?tab=recurring#subscriptions" className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
+              <a href="/recurring#subscriptions" className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
                 {t("seeSubscriptions")}
               </a>
             </li>

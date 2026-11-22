@@ -92,6 +92,8 @@ export function splitMessage(text: string, max = TELEGRAM_LIMIT): string[] {
   return parts.filter((p) => p.trim().length > 0);
 }
 
+const CADENCE_HE: Record<string, string> = { weekly: "בשבוע", monthly: "בחודש", yearly: "בשנה" };
+
 /** Returns the reply text, or null when the message is not from the configured chat. */
 export async function handleCommand(
   text: string,
@@ -104,7 +106,7 @@ export async function handleCommand(
   const money = cfg.hideAmounts ? () => HIDDEN_AMOUNT : showMoney;
   const hide = !!cfg.hideAmounts;
   const workspaceId = deps.workspaceId;
-  if (workspaceId === undefined) return "Penny is not set up yet. Finish setup in the app first.";
+  if (workspaceId === undefined) return "האפליקציה עוד לא מוגדרת. סיימו את ההגדרה באפליקציה.";
 
   switch (cmd) {
     case "/start":
@@ -116,36 +118,36 @@ export async function handleCommand(
     case "/month": {
       const i = loadInsights(workspaceId, deps.today);
       const lines = i.topCategories.map((c) => `${c.name}: ${money(c.total)}`);
-      return [`Spent this month: ${money(i.monthTotal)}`, ...lines].join("\n");
+      return [`הוצאות החודש: ${money(i.monthTotal)}`, ...lines].join("\n");
     }
     case "/subs": {
       const i = loadInsights(workspaceId, deps.today);
-      if (i.series.length === 0) return "No subscriptions detected yet.";
+      if (i.series.length === 0) return "עוד לא זוהו מנויים.";
       return i.series
         .map((s) => {
-          const change = s.priceChange ? ` (price ${money(s.priceChange.from)} -> ${money(s.priceChange.to)})` : "";
-          return `${s.merchant} ${money(s.expectedAmount)} ${s.cadence}${s.status === "candidate" ? " [maybe]" : ""}${change}`;
+          const change = s.priceChange ? ` (המחיר עלה מ־${money(s.priceChange.from)} ל־${money(s.priceChange.to)})` : "";
+          return `${s.merchant} ${money(s.expectedAmount)} ${CADENCE_HE[s.cadence] ?? s.cadence}${s.status === "candidate" ? " (אולי)" : ""}${change}`;
         })
         .join("\n");
     }
     case "/forecast": {
       const i = loadInsights(workspaceId, deps.today, cfg.billingDay);
       const forecast = forecastCards({ today: deps.today, cards: i.cards, series: i.series, installments: i.installments });
-      if (forecast.length === 0) return "No card activity yet.";
+      if (forecast.length === 0) return "עוד אין פעילות בכרטיסים.";
       return forecast
         .map(
           (f) =>
-            `${f.date} card ${f.account?.slice(-4)}: ${money(f.total)} (posted ${money(f.parts.posted)}, recurring ${money(f.parts.recurring)}, installments ${money(f.parts.installments)}, other ${money(f.parts.discretionary)})`
+            `${f.date} כרטיס ${f.account?.slice(-4)}: ${money(f.total)} (נקלט ${money(f.parts.posted)}, קבועות ${money(f.parts.recurring)}, תשלומים ${money(f.parts.installments)}, אחר ${money(f.parts.discretionary)})`
         )
         .join("\n");
     }
     case "/status": {
       const run = getLastSyncRun(workspaceId);
-      return run ? `Last sync: ${run.status} at ${run.startedAt}` : "No sync yet.";
+      return run ? `סנכרון אחרון: ${run.status === "completed" ? "הצליח" : run.status === "failed" ? "נכשל" : "רץ"} ב־${run.startedAt}` : "עוד לא היה סנכרון.";
     }
     case "/sync":
       // Two syncs at once hit the bank twice and race on the same rows.
-      if (deps.isSyncRunning?.()) return "A sync is already running. Try again when it finishes.";
+      if (deps.isSyncRunning?.()) return "סנכרון כבר רץ עכשיו, נסו שוב כשיסתיים.";
       return deps.runSync();
     default:
       return HELP;

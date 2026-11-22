@@ -1,6 +1,8 @@
 import "server-only";
 
 import { getDb } from "../index";
+import { israelDay } from "@/server/lib/date-utils";
+import { balanceDrift } from "@/lib/balance-drift";
 import { LIABILITY_TYPES, type AssetInput, type AssetType } from "@/lib/types";
 
 export interface AssetRow extends AssetInput {
@@ -12,12 +14,12 @@ const COLUMNS = `id, name, type, currency, symbol, quantity, manual_value as man
   cost_basis as costBasis, liquid, is_liability as isLiability, note, fee_deposit as feeDeposit,
   fee_balance as feeBalance, monthly_deposit as monthlyDeposit, interest_rate as interestRate, monthly_payment as monthlyPayment,
   fund_id as fundId, fund_source as fundSource, city, street, rooms, size_m2 as sizeM2,
-  purchase_price as purchasePrice, purchase_month as purchaseMonth`;
+  purchase_price as purchasePrice, purchase_month as purchaseMonth, cost_fx as costFx`;
 
 const isLiabilityType = (t: AssetType) => (LIABILITY_TYPES as readonly string[]).includes(t);
 
 const homeValues = (a: AssetInput) =>
-  [a.city ?? null, a.street ?? null, a.rooms ?? null, a.sizeM2 ?? null, a.purchasePrice ?? null, a.purchaseMonth ?? null];
+  [a.city ?? null, a.street ?? null, a.rooms ?? null, a.sizeM2 ?? null, a.purchasePrice ?? null, a.purchaseMonth ?? null, a.costFx ?? null];
 
 export function listAssets(workspaceId: number): AssetRow[] {
   const rows = getDb()
@@ -31,8 +33,8 @@ export function createAssets(workspaceId: number, inputs: AssetInput[]): number 
   const stmt = db.prepare(
     `INSERT INTO assets (workspace_id, name, type, currency, symbol, quantity, manual_value, cost_basis, liquid, is_liability, note,
        fee_deposit, fee_balance, monthly_deposit, interest_rate, monthly_payment, fund_id, fund_source,
-       city, street, rooms, size_m2, purchase_price, purchase_month)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       city, street, rooms, size_m2, purchase_price, purchase_month, cost_fx)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   db.transaction(() => {
     for (const a of inputs) {
@@ -50,7 +52,7 @@ export function updateAsset(workspaceId: number, id: number, a: AssetInput): boo
         `UPDATE assets SET name = ?, type = ?, currency = ?, symbol = ?, quantity = ?, manual_value = ?,
            cost_basis = ?, liquid = ?, is_liability = ?, note = ?, fee_deposit = ?, fee_balance = ?,
            monthly_deposit = ?, interest_rate = ?, monthly_payment = ?, fund_id = ?, fund_source = ?,
-           city = ?, street = ?, rooms = ?, size_m2 = ?, purchase_price = ?, purchase_month = ?
+           city = ?, street = ?, rooms = ?, size_m2 = ?, purchase_price = ?, purchase_month = ?, cost_fx = ?
          WHERE workspace_id = ? AND id = ?`
       )
       .run(a.name, a.type, a.currency, a.symbol, a.quantity, a.manualValue, a.costBasis, a.liquid ? 1 : 0, isLiabilityType(a.type) ? 1 : 0, a.note,
@@ -120,24 +122,46 @@ function trackedHistory(workspaceId: number): { date: string; netWorth: number }
   return out;
 }
 
-export function saveAccountBalances(workspaceId: number, provider: string, accounts: { accountNumber: string; balance?: number }[]) {
+export function saveAccountBalances(
+  workspaceId: number,
+  provider: string,
+  accounts: { accountNumber: string; balance?: number; transactions?: { date: string; chargedAmount: number; status: string }[] }[],
+  /** First day the scrape fetched (YYYY-MM-DD); without it the balance isn't checked. */
+  windowStart = "9999-12-31"
+) {
   const db = getDb();
+  const prevStmt = db.prepare("SELECT balance, drift, updated_at as updatedAt FROM account_balances WHERE workspace_id = ? AND provider = ? AND account_number = ?");
   const stmt = db.prepare(
-    `INSERT INTO account_balances (workspace_id, provider, account_number, balance, updated_at) VALUES (?, ?, ?, ?, datetime('now'))
-     ON CONFLICT(workspace_id, provider, account_number) DO UPDATE SET balance = excluded.balance, updated_at = excluded.updated_at`
+    `INSERT INTO account_balances (workspace_id, provider, account_number, balance, drift, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(workspace_id, provider, account_number) DO UPDATE SET balance = excluded.balance, drift = excluded.drift, updated_at = excluded.updated_at`
   );
+  const today = israelDay(new Date().toISOString());
   db.transaction(() => {
-    for (const a of accounts) if (a.balance != null) stmt.run(workspaceId, provider, a.accountNumber, a.balance);
+    for (const a of accounts) {
+      if (a.balance == null) continue;
+      const prev = prevStmt.get(workspaceId, provider, a.accountNumber) as { balance: number; drift: number | null; updatedAt: string } | undefined;
+      const prevDay = prev ? israelDay(`${prev.updatedAt.replace(" ", "T")}Z`) : "";
+      const checked = balanceDrift(
+        prev ? { balance: prev.balance, day: prevDay } : null,
+        a.balance,
+        (a.transactions ?? []).map((t) => ({ day: israelDay(t.date), amount: t.chargedAmount, status: t.status })),
+        today,
+        windowStart
+      );
+      // A second sync the same day can't re-check (no clean day boundary), so it keeps the day's finding.
+      const drift = checked ?? (prevDay === today ? prev?.drift ?? null : null);
+      stmt.run(workspaceId, provider, a.accountNumber, a.balance, drift);
+    }
   })();
 }
 
 export function listAccountBalances(workspaceId: number) {
   return getDb()
     .prepare(
-      `SELECT rowid as id, provider, account_number as accountNumber, balance, updated_at as updatedAt
+      `SELECT rowid as id, provider, account_number as accountNumber, balance, drift, updated_at as updatedAt
        FROM account_balances WHERE workspace_id = ? ORDER BY provider, account_number`
     )
-    .all(workspaceId) as { id: number; provider: string; accountNumber: string; balance: number; updatedAt: string }[];
+    .all(workspaceId) as { id: number; provider: string; accountNumber: string; balance: number; drift: number | null; updatedAt: string }[];
 }
 
 /** Per-asset daily values, oldest first. */
@@ -149,6 +173,10 @@ export function assetSnapshots(workspaceId: number): Map<number, { date: string;
     )
     .all(workspaceId) as { assetId: number; date: string; valueIls: number }[];
   const out = new Map<number, { date: string; valueIls: number }[]>();
-  for (const r of rows) out.set(r.assetId, [...(out.get(r.assetId) ?? []), { date: r.date, valueIls: r.valueIls }]);
+  for (const r of rows) {
+    const list = out.get(r.assetId);
+    if (list) list.push({ date: r.date, valueIls: r.valueIls });
+    else out.set(r.assetId, [{ date: r.date, valueIls: r.valueIls }]);
+  }
   return out;
 }

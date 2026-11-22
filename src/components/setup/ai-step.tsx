@@ -233,10 +233,10 @@ export function AIStep({ onComplete, onBack }: AIStepProps) {
       </div>
 
       <footer className="flex items-center justify-between pt-2">
-        <IconButton label={t("aiBackButton")} variant="outline" onClick={onBack}>
+        <IconButton showLabel label={t("aiBackButton")} variant="outline" onClick={onBack}>
           <Back />
         </IconButton>
-        <IconButton label={saving ? t("aiSavingButton") : t("aiContinueButton")} variant="default" onClick={handleSave} disabled={!canContinue || saving}>
+        <IconButton showLabel label={saving ? t("aiSavingButton") : t("aiContinueButton")} variant="default" onClick={handleSave} disabled={!canContinue || saving}>
           <Forward />
         </IconButton>
       </footer>

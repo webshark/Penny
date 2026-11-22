@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import { runMigrations } from "./migrate";
 import { dataDir, dbPath } from "../lib/data-dir";
+import { ensureDemoData } from "../demo/seed";
 
 const DB_DIR = dataDir();
 const DB_PATH = dbPath(DB_DIR);
@@ -19,6 +20,7 @@ function createDatabase(): Database.Database {
   db.pragma("busy_timeout = 5000");
 
   runMigrations(db);
+  ensureDemoData(db);
 
   return db;
 }
@@ -36,4 +38,11 @@ export function getDb(): Database.Database {
   }
   if (migratedConnection !== globalThis._db) { runMigrations(globalThis._db); migratedConnection = globalThis._db; }
   return globalThis._db;
+}
+
+/** Closes the shared connection so a restore can replace the file; the next getDb() reopens it. */
+export function closeDb(): void {
+  globalThis._db?.close();
+  globalThis._db = undefined;
+  migratedConnection = undefined;
 }

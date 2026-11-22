@@ -73,7 +73,9 @@ export function PageWheelNav() {
   const tab = params.get("tab") ?? "period";
   const view = params.get("view");
   const { plan } = usePlan();
-  const pages = pagingOrder(plan.simpleMode && plan.homeStyle !== "companion");
+  // Home is one stop: the simple/advanced switch is a toggle on the page, never a wheel jump.
+  const pages = pagingOrder(false);
+  // Simple mode never moves pages by scrolling; the setting is for the advanced view only.
   const index = plan.wheelPaging ? pagingIndex(pages, pathname, tab, view) : -1;
   // The plan can differ between the server render and the client (cached locally), so the buttons appear after hydration.
   const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);

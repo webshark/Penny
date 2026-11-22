@@ -11,11 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { markProfileChosen, useProfiles, useSwitchProfile } from "@/components/layout/workspace-switcher";
 import { deleteProfile, saveProfile } from "@/lib/api";
-import { defaultPip, profileName, type ProfilePip } from "@/lib/profile-avatar";
+import { profileName } from "@/lib/profile-avatar";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { PipPicker } from "@/components/home/pet-card";
+import { AvatarEditor, type AvatarDraft } from "./avatar-editor";
 import { ProfileAvatar } from "./profile-avatar";
 
 // Immersive "who's using?" screen: always dark, whatever the app theme.
@@ -23,11 +23,10 @@ const tile = "group flex min-h-11 flex-col items-center gap-3 rounded-3xl p-2 ou
 const square =
   "size-24 text-5xl md:size-36 md:text-6xl ring-white/0 ring-offset-4 ring-offset-[#0c0b14] motion-safe:transition motion-safe:duration-200 group-hover:ring-4 group-hover:ring-white group-focus-visible:ring-4 group-focus-visible:ring-white motion-safe:group-hover:scale-105 motion-safe:group-focus-visible:scale-105 motion-safe:group-active:scale-95";
 
-type Draft = { id: number | null; name: string; pip: ProfilePip };
+type Draft = { id: number | null; name: string; avatar: AvatarDraft };
 
 export function ProfilesPage() {
   const t = useTranslations("profiles");
-  const tPet = useTranslations("pet");
   const px = useIsMobile() ? 88 : 132; // a little inside the 96/144 square
   const nameOf = (p: Profile) => profileName(p.name, t("me"));
   const router = useRouter();
@@ -48,7 +47,7 @@ export function ProfilesPage() {
   const onError = (e: unknown) => toast.error(e instanceof Error ? e.message : t("error"));
 
   const save = useMutation({
-    mutationFn: (d: Draft) => saveProfile(d.id, d.name, { avatarPet: d.pip }),
+    mutationFn: (d: Draft) => saveProfile(d.id, d.name, { avatarColor: d.avatar.color, avatarPhoto: d.avatar.photo }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["profiles"] });
       qc.invalidateQueries({ queryKey: ["settings"] });
@@ -73,13 +72,15 @@ export function ProfilesPage() {
     setConfirmDelete(false);
     setDraft(
       p
-        ? { id: p.id, name: nameOf(p), pip: p.avatarPet ?? defaultPip(p.id) }
-        : { id: null, name: "", pip: defaultPip(profiles.length + 1) }
+        ? { id: p.id, name: nameOf(p), avatar: { color: p.avatarColor, photo: p.avatarPhoto } }
+        : { id: null, name: "", avatar: { color: null, photo: null } }
     );
   };
 
   return (
     <main className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-y-auto bg-[#0c0b14] bg-[radial-gradient(ellipse_at_top,#2a2160_0%,transparent_60%)] px-4 py-12 text-white">
+      {/* The brand lives here only; inside the app the sidebar stays free of it. */}
+      <p className="absolute top-6 text-lg font-semibold tracking-tight text-white/80" lang="en" dir="ltr">Penny</p>
       <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
         {managing ? t("manageTitle") : t("title")}
       </h1>
@@ -148,13 +149,7 @@ export function ProfilesPage() {
                 <DialogTitle>{draft.id == null ? t("add") : t("edit")}</DialogTitle>
               </DialogHeader>
 
-              <div className="flex justify-center">
-                <ProfileAvatar
-                  profile={{ id: draft.id ?? 1, name: draft.name, avatarEmoji: null, avatarColor: null, avatarPet: draft.pip }}
-                  className="size-28"
-                  px={104}
-                />
-              </div>
+              <AvatarEditor id={draft.id ?? profiles.length + 1} name={draft.name} value={draft.avatar} onChange={(avatar) => setDraft({ ...draft, avatar })} />
 
               <label className="flex flex-col gap-1.5 text-sm font-medium">
                 {t("name")}
@@ -168,20 +163,6 @@ export function ProfilesPage() {
                 />
               </label>
 
-              <fieldset className="space-y-4">
-                <legend className="mb-2 text-sm font-medium">{t("pip")}</legend>
-                <PipPicker value={draft.pip} onChange={(v) => setDraft({ ...draft, pip: { ...draft.pip, ...v } })} />
-                <label className="flex flex-col gap-1.5 text-sm font-medium">
-                  {t("pipName")}
-                  <Input
-                    maxLength={24}
-                    value={draft.pip.name}
-                    placeholder={tPet("defaultName")}
-                    onChange={(e) => setDraft({ ...draft, pip: { ...draft.pip, name: e.target.value } })}
-                    className="h-11"
-                  />
-                </label>
-              </fieldset>
 
               {confirmDelete ? (
                 <p role="alert" className="text-sm text-muted-foreground">

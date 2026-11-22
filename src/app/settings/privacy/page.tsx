@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Forward } from "@/components/ui/dir-chevron";
+import { Lock } from "lucide-react";
 import { SectionShell, SettingCard, SettingList, SettingRow } from "@/components/settings/section-shell";
 import { PrivacyModeCard } from "@/components/settings/privacy-mode-switch";
 import { AppLockCard } from "@/components/settings/app-lock-card";
@@ -23,7 +24,7 @@ export default async function PrivacySettingsPage() {
     { title: t("protectTitle"), line: t("protectShort"), info: t("protectBody") },
   ];
   return (
-    <SectionShell title={t("title")} description={t("description")}>
+    <SectionShell title={t("title")} description={t("description")} icon={<Lock aria-hidden />}>
       <AppLockCard />
 
       <PrivacyModeCard />

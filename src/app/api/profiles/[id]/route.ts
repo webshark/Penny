@@ -8,6 +8,8 @@ async function profileId({ params }: Ctx) {
   return Number.isInteger(id) && id > 0 && getProfile(id) ? id : null;
 }
 
+import { errorResponse } from "@/server/lib/api-error";
+
 export async function PATCH(request: Request, ctx: Ctx) {
   const id = await profileId(ctx);
   if (!id) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -19,7 +21,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
   try {
     return NextResponse.json(updateProfile(id, name, avatar));
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to update profile" }, { status: 400 });
+    return errorResponse("profiles", err);
   }
 }
 
@@ -30,6 +32,6 @@ export async function DELETE(_request: Request, ctx: Ctx) {
     deleteProfile(id);
     return NextResponse.json({ success: true });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to delete profile" }, { status: 409 });
+    return errorResponse("profiles", err);
   }
 }

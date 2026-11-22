@@ -8,10 +8,13 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = process.argv[2] ?? "41234";
 const dir = process.env.PENNY_DATA_DIR ?? process.env.SPENT_DATA_DIR;
-const flag = path.join(dir ? path.resolve(dir) : path.join(root, "data"), "lan-access.json");
+const data = dir ? path.resolve(dir) : path.join(root, "data");
+const flag = path.join(data, "lan-access.json");
+// Phone access only behind the app lock: a leftover flag without a lock never opens the network.
+const lanAllowed = () => fs.existsSync(flag) && fs.existsSync(path.join(data, ".app-lock.json"));
 
 function run() {
-  const host = fs.existsSync(flag) ? "0.0.0.0" : "127.0.0.1";
+  const host = lanAllowed() ? "0.0.0.0" : "127.0.0.1";
   const child = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "start", "-H", host, "-p", port], {
     cwd: root,
     stdio: "inherit",

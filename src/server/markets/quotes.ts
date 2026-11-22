@@ -1,7 +1,9 @@
 import "server-only";
+import { markFailed, recentlyFailed } from "@/server/lib/fetch-backoff";
 
 import { getDb } from "../db/index";
 import type { Quote } from "@/lib/types";
+import { isDemoMode } from "@/server/demo/mode";
 
 const TTL_MS = 15 * 60 * 1000;
 const YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart/";
@@ -21,9 +23,10 @@ export function parseChart(symbol: string, json: unknown, now = new Date()): Quo
   const marketPrice = result?.meta?.regularMarketPrice;
   if (!result || !marketPrice) return null;
   const meta = result.meta;
-  // Tel Aviv prices come in agorot.
-  const scale = meta.currency === "ILA" ? 0.01 : 1;
-  const currency = meta.currency === "ILA" ? "ILS" : (meta.currency ?? "USD");
+  // Tel Aviv prices come in agorot, London in pence, Johannesburg in cents: report the main unit.
+  const MINOR: Record<string, string> = { ILA: "ILS", GBp: "GBP", GBX: "GBP", ZAc: "ZAR" };
+  const scale = meta.currency && MINOR[meta.currency] ? 0.01 : 1;
+  const currency = meta.currency && MINOR[meta.currency] ? MINOR[meta.currency] : (meta.currency ?? "USD");
   const stamps = result.timestamp ?? [];
   const raw = result.indicators.quote[0]?.close ?? [];
   const points = stamps
@@ -71,11 +74,14 @@ export async function getQuotes(symbols: string[]): Promise<Map<string, Quote | 
     "INSERT INTO quotes_cache (symbol, payload, fetched_at) VALUES (?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at"
   );
   const unique = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
+  // The demo is offline: no quotes are fetched and every tile reads "unavailable".
+  if (isDemoMode()) return new Map<string, Quote | null>();
   const entries = await Promise.all(
     unique.map(async (symbol): Promise<[string, Quote | null]> => {
       const cached = read.get(symbol) as { payload: string; fetchedAt: number } | undefined;
       if (cached && Date.now() - cached.fetchedAt < TTL_MS) return [symbol, JSON.parse(cached.payload)];
-      const fresh = await fetchQuote(symbol).catch(() => null);
+      const fresh = recentlyFailed(`quote:${symbol}`) ? null : await fetchQuote(symbol).catch(() => null);
+      if (!fresh) markFailed(`quote:${symbol}`);
       if (fresh) {
         write.run(symbol, JSON.stringify(fresh), Date.now());
         return [symbol, fresh];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chargesBetween, forecastBalance, sizeTier } from "@/lib/balance-forecast";
+import { chargesBetween, forecastBalance, projectAccounts, sizeTier } from "@/lib/balance-forecast";
 
 describe("forecastBalance", () => {
   const base = { today: "2026-11-05", payday: 10, monthlyIncome: 10_000, days: 90 };
@@ -43,5 +43,78 @@ describe("sizeTier", () => {
   });
   it("keeps equal charges in one tier", () => {
     expect([50, 50, 50].map(sizeTier([50, 50, 50]))).toEqual([0, 0, 0]);
+  });
+});
+
+describe("projectAccounts", () => {
+  const base = {
+    today: "2026-11-05",
+    accounts: [
+      { account: "A", name: "Bank A", provider: "hapoalim", balance: 3_000 },
+      { account: "B", name: "Bank B", provider: "leumi", balance: 500 },
+    ],
+    events: [
+      { date: "2026-11-08", account: "A", name: "card", amount: -2_500, kind: "card" as const, estimated: true },
+      { date: "2026-11-10", account: "A", name: "salary", amount: 10_000, kind: "income" as const },
+      { date: "2026-11-06", account: "B", name: "rent", amount: -100, kind: "recurring" as const },
+    ],
+    days: 10,
+  };
+
+  it("projects each account on its own and adds them into a total", () => {
+    const f = projectAccounts(base);
+    const a = f.accounts.find((x) => x.account === "A")!;
+    const b = f.accounts.find((x) => x.account === "B")!;
+    const at = (points: { date: string; expected: number }[], d: string) => points.find((p) => p.date === d)!.expected;
+    expect(a.points).toHaveLength(11);
+    expect(at(a.points, "2026-11-08")).toBe(500);
+    expect(at(a.points, "2026-11-10")).toBe(10_500);
+    expect(at(b.points, "2026-11-08")).toBe(400);
+    expect(at(f.total.points, "2026-11-08")).toBe(900);
+    expect(at(f.total.points, "2026-11-10")).toBe(10_900);
+    expect(f.total.startBalance).toBe(3_500);
+  });
+
+  it("widens the band for estimated events and shows the low/high case", () => {
+    const f = projectAccounts(base);
+    const a = f.accounts.find((x) => x.account === "A")!;
+    const point = a.points.find((p) => p.date === "2026-11-08")!;
+    expect(point.low).toBe(250);
+    expect(point.high).toBe(750);
+  });
+
+  it("takes everyday spending out every day, and widens that band too", () => {
+    const f = projectAccounts({
+      today: "2026-11-05",
+      accounts: [{ account: "A", name: "Bank A", provider: "hapoalim", balance: 100, dailyRate: 10 }],
+      events: [],
+      days: 3,
+    });
+    expect(f.accounts[0].points.map((p) => p.expected)).toEqual([100, 90, 80, 70]);
+    expect(f.accounts[0].points.map((p) => p.low)).toEqual([100, 87, 74, 61]);
+    expect(f.accounts[0].points.map((p) => p.high)).toEqual([100, 93, 86, 79]);
+    expect(f.accounts[0].dailyRate).toBe(10);
+  });
+
+  it("reports the shortfall against the buffer and the day it is first needed", () => {
+    const f = projectAccounts({ ...base, buffer: 600 });
+    const a = f.accounts.find((x) => x.account === "A")!;
+    expect(a.lowest).toEqual({ date: "2026-11-08", amount: 500 });
+    expect(a.shortfall).toEqual({ amount: 100, by: "2026-11-08" });
+    expect(f.warnings.map((w) => w.account)).toEqual(["A", "B"]);
+  });
+
+  it("marks a balance stale when it is more than three days old or never synced", () => {
+    const f = projectAccounts({
+      today: "2026-11-05",
+      accounts: [
+        { account: "A", name: "A", provider: "hapoalim", balance: 100, balanceDate: "2026-11-04" },
+        { account: "B", name: "B", provider: "leumi", balance: 100, balanceDate: "2026-10-01" },
+        { account: "C", name: "C", provider: "discount", balance: 100 },
+      ],
+      events: [],
+      days: 1,
+    });
+    expect(f.accounts.map((a) => a.stale)).toEqual([false, true, true]);
   });
 });

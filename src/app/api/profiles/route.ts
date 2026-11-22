@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createProfile, listProfiles } from "@/server/db/queries/profiles";
 import { parseAvatar } from "@/lib/profile-avatar";
 
+import { errorResponse } from "@/server/lib/api-error";
+
 export async function GET() {
   return NextResponse.json(listProfiles());
 }
@@ -15,6 +17,6 @@ export async function POST(request: Request) {
   try {
     return NextResponse.json(createProfile(name, avatar), { status: 201 });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to create profile" }, { status: 400 });
+    return errorResponse("profiles", err);
   }
 }

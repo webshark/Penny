@@ -7,8 +7,13 @@ import {
 } from "@/server/db/queries/bank-credentials";
 import { BANK_PROVIDERS } from "@/lib/types";
 import { getWorkspaceIdFromRequest } from "@/server/lib/workspace-context";
+import { demoBlockedResponse } from "@/server/demo/guard";
 
 export async function POST(request: Request) {
+  // The demo never stores a real bank login: its connections are seeded placeholders.
+  const blocked = demoBlockedResponse();
+  if (blocked) return blocked;
+
   const workspaceId = getWorkspaceIdFromRequest(request);
   const body = (await request.json()) as {
     provider: string;

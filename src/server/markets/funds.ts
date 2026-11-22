@@ -1,4 +1,5 @@
 import "server-only";
+import { markFailed, recentlyFailed } from "@/server/lib/fetch-backoff";
 
 import { getDb } from "../db/index";
 import type { Fund, FundSource } from "@/lib/types";
@@ -49,6 +50,7 @@ export async function loadFunds(source: FundSource): Promise<Fund[]> {
     | { payload: string; fetchedAt: number }
     | undefined;
   if (cached && Date.now() - cached.fetchedAt < TTL_MS) return JSON.parse(cached.payload);
+  if (recentlyFailed(`funds:${source}`)) return cached ? JSON.parse(cached.payload) : [];
   try {
     const resource = RESOURCES[source];
     const [latest] = await get({ resource_id: resource, limit: "1", sort: "REPORT_PERIOD desc", fields: "REPORT_PERIOD" });
@@ -59,6 +61,7 @@ export async function loadFunds(source: FundSource): Promise<Fund[]> {
     ).run(source, JSON.stringify(funds), Date.now());
     return funds;
   } catch {
+    markFailed(`funds:${source}`);
     return cached ? JSON.parse(cached.payload) : [];
   }
 }

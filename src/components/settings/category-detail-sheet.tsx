@@ -1,5 +1,6 @@
 "use client";
 
+import { CATEGORY_COLORS } from "@/components/settings/new-category-dialog";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useMessages, useTranslations } from "next-intl";
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import {
   deleteCategory,
+  updateCategoryLook,
   getCategories,
   setCategoryParent,
   updateCategorySpendingType,
@@ -104,6 +106,7 @@ function Body({
   onClose: () => void;
 }) {
   const td = useTranslations("settings.categoryDetail");
+  const tCatTitle = useTranslations("categoriesSeeded");
   const sameKind = allCategories.filter(
     (c) => c.kind === category.kind && c.id !== category.id
   );
@@ -137,7 +140,7 @@ function Body({
             />
           </div>
           <div className="min-w-0 flex-1">
-            <SheetTitle>{category.name}</SheetTitle>
+            <SheetTitle>{translateCategoryName(category.name, tCatTitle)}</SheetTitle>
             <SheetDescription className="mt-0.5">
               {category.kind === "expense"
                 ? td("expenseCategory")
@@ -151,6 +154,8 @@ function Body({
       </SheetHeader>
 
       <div className="flex-1 space-y-6 p-6">
+        <LookSection key={category.id} category={category} />
+
         {!category.parentId && data?.isParent !== true ? (
           <BudgetSection category={category} data={data} />
         ) : (
@@ -261,7 +266,7 @@ function DeleteCategorySection({
                 ))}
               </ul>
             ) : null}
-            <IconButton
+            <IconButton showLabel
               label={t("deleteButton")}
               variant="destructive"
               className="mt-3"
@@ -292,7 +297,7 @@ function DeleteCategorySection({
             >
               <X className="size-4" aria-hidden />
             </IconButton>
-            <IconButton
+            <IconButton showLabel
               label={mutation.isPending ? tCommon("deleting") : t("deleteButton")}
               variant="destructive"
               onClick={() => mutation.mutate()}
@@ -449,7 +454,7 @@ function SpendingTypeSection({ category }: { category: Category }) {
             value={category.needType}
             onValueChange={(v) => v && mutation.mutate({ needType: v as NeedType })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={td("needTypeLabel")}>
               <SelectValue>{(v: string) => td(`needType_${v}`)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -465,7 +470,7 @@ function SpendingTypeSection({ category }: { category: Category }) {
             value={category.costType}
             onValueChange={(v) => v && mutation.mutate({ costType: v as CostType })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={td("costTypeLabel")}>
               <SelectValue>{(v: string) => td(`costType_${v}`)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -475,6 +480,48 @@ function SpendingTypeSection({ category }: { category: Category }) {
             </SelectContent>
           </Select>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** Name and colour: saved when the field loses focus (or on Enter), and each swatch saves on tap. */
+function LookSection({ category }: { category: Category }) {
+  const td = useTranslations("settings.categoryDetail");
+  const tCat = useTranslations("categoriesSeeded");
+  const queryClient = useQueryClient();
+  const shown = translateCategoryName(category.name, tCat);
+  const [name, setName] = useState(shown);
+  const mutation = useMutation({
+    mutationFn: (fields: { name?: string; color?: string }) => updateCategoryLook(category.id, fields),
+    onSuccess: () => {
+      ["categories", "summary", "budgets", "overview"].forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      toast.success(td("lookSaved"));
+    },
+    onError: (err: Error) => {
+      setName(shown);
+      toast.error(err.message.includes("duplicate") ? td("nameTaken") : td("lookFailed"));
+    },
+  });
+  const saveName = () => {
+    const next = name.trim();
+    if (!next) { setName(shown); return; }
+    if (next !== shown) mutation.mutate({ name: next });
+  };
+  return (
+    <section className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor={`cat-name-${category.id}`}>{td("nameLabel")}</Label>
+        <Input id={`cat-name-${category.id}`} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onBlur={saveName}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }} />
+      </div>
+      <div role="radiogroup" aria-label={td("colorLabel")} className="flex flex-wrap gap-2">
+        {CATEGORY_COLORS.map((c) => (
+          <button key={c} type="button" role="radio" aria-checked={category.color.toLowerCase() === c.toLowerCase()} aria-label={c}
+            onClick={() => mutation.mutate({ color: c })}
+            className="grid size-8 place-items-center rounded-full ring-offset-2 ring-offset-background focus-visible:outline-2 focus-visible:outline-ring aria-checked:ring-2 aria-checked:ring-foreground"
+            style={{ background: c }} />
+        ))}
       </div>
     </section>
   );
@@ -528,7 +575,7 @@ function GroupSection({
             mutation.mutate(next);
           }}
         >
-          <SelectTrigger>
+          <SelectTrigger aria-label={td("parentGroup")}>
             <SelectValue>
               {(value: string) =>
                 value === NONE_VALUE

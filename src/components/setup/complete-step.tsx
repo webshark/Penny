@@ -143,7 +143,7 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
       <ImportProgress />
 
       <div className="flex justify-center">
-        <IconButton label={t("completeOpenBudgets")} variant="default" size="icon-lg" onClick={onFinish}>
+        <IconButton showLabel label={t("completeOpenBudgets")} variant="default" size="icon-lg" onClick={onFinish}>
           <Check className="size-4" aria-hidden />
         </IconButton>
       </div>

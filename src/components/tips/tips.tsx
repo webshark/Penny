@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useLocale } from "next-intl";
+import { useLocale, useMessages } from "next-intl";
+import type en from "@/i18n/messages/en.json";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lightbulb, Search, X } from "lucide-react";
 import { dismissSuggestion, getSettings, getSuggestions } from "@/lib/api";
@@ -10,23 +11,12 @@ import { TIPS, TIP_CATEGORIES, relevantTips, tipKey, tipOfDay, tipSignals, type 
 import { CardShell } from "@/components/home/card-shell";
 import { IconButton } from "@/components/ui/icon-button";
 
-// shortcut: UI labels live here, not in he/en.json, to keep the tips feature self-contained; move them if more strings appear.
-const L = {
-  he: {
-    daily: "טיפ יומי", tips: "טיפים", library: "כל הטיפים", disclaimer: "מידע כללי, לא ייעוץ.", notRelevant: "לא רלוונטי", open: "לפעולה",
-    search: "חיפוש טיפים", all: "הכול", none: "אין טיפים שמתאימים לחיפוש.", forYou: "טיפים בשבילכם",
-    cat: { budget: "תקציב", emergency: "קרן חירום", debt: "חובות ומינוס", pension: "פנסיה", savings: "חיסכון", tax: "מס", insurance: "ביטוחים", banking: "בנק ועמלות", mortgage: "משכנתא", investing: "השקעות", kids: "ילדים", shopping: "קניות ומנויים", seasonal: "עונתי", income: "שכר והכנסה", retirement: "פרישה" },
-  },
-  en: {
-    daily: "Tip of the day", tips: "Tips", library: "All tips", disclaimer: "General information, not advice.", notRelevant: "Not relevant", open: "Take action",
-    search: "Search tips", all: "All", none: "No tips match your search.", forYou: "Tips for you",
-    cat: { budget: "Budget", emergency: "Emergency fund", debt: "Debt & overdraft", pension: "Pension", savings: "Savings", tax: "Tax", insurance: "Insurance", banking: "Bank & fees", mortgage: "Mortgage", investing: "Investing", kids: "Kids", shopping: "Shopping & subscriptions", seasonal: "Seasonal", income: "Pay & income", retirement: "Retirement" },
-  },
-} as const;
+
+type TipsCopy = (typeof en)["tipsUi"];
 
 function useLabels() {
   const locale = useLocale();
-  return { l: locale === "he" ? L.he : L.en, lang: (locale === "he" ? "he" : "en") as "he" | "en" };
+  return { l: (useMessages() as unknown as { tipsUi: TipsCopy }).tipsUi, lang: (locale === "he" ? "he" : "en") as "he" | "en" };
 }
 
 /** Household signals and dismissed tip keys, shared by every tip surface. */

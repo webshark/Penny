@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useId, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import { ChevronDown, Plus, AlertCircle, Menu, MoreVertical, Landmark, CalendarDays, Tags, ArrowLeftRight, PiggyBank, Settings, SlidersHorizontal, Search } from "lucide-react";
-import { Forward } from "@/components/ui/dir-chevron";
+import { ChevronDown, Plus, AlertCircle, MoreVertical, SlidersHorizontal, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { MonthNav, MonthStrip, monthKey, shiftMonth } from "@/components/ui/month-nav";
 import { translateCategoryName } from "@/lib/i18n-data";
 import { toast } from "sonner";
@@ -14,12 +14,11 @@ import {
   updateBudget, updateCategoryBudgetMode,
 } from "@/lib/api";
 import { usePlan } from "@/hooks/use-plan";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { shekels } from "@/lib/money";
 import { wealthGroups, type WealthGroup } from "@/lib/wealth-growth";
-import { buildCashflow, cashflowMonth, trackedRows, type Week } from "@/lib/simple-cashflow";
+import { buildCashflow, cashflowMonth, type Week } from "@/lib/simple-cashflow";
 
 /**
  * Simple mode: one scrolling page, one card per cash-flow line, newest month first.
@@ -32,8 +31,11 @@ export function SimpleHome({ name, cardOnly, extra, heroAside }: { name?: string
   const t = useTranslations("home.simple");
   const locale = useLocale();
   const [offset, setOffset] = useState(0);
-  // Desktop: which line the detail panel shows.
+  // Desktop: which line the detail panel shows, and how the chart is ordered and narrowed.
   const [selected, setSelected] = useState("variable");
+  const [chartSort, setChartSort] = useState<"amount" | "name">("amount");
+  const [chartDesc, setChartDesc] = useState(true);
+  const [chartFilter, setChartFilter] = useState<"all" | "over" | "active">("all");
 
   const queryClient = useQueryClient();
   const tCat = useTranslations("categoriesSeeded");
@@ -64,7 +66,7 @@ export function SimpleHome({ name, cardOnly, extra, heroAside }: { name?: string
   const assets = useQuery({ queryKey: ["assets"], queryFn: getAssets, enabled: offset === 0 });
   const cash = useQuery({ queryKey: ["cash-ahead"], queryFn: getCashAhead, enabled: offset === 0 });
   // Freshness from the per-bank health Home already loads: the newest sync, or a failure if any bank failed.
-  const banks = useQuery({ queryKey: ["home"], queryFn: getHome }).data?.bankHealth ?? [];
+  const banks = useQuery({ queryKey: ["home"], queryFn: () => getHome() }).data?.bankHealth ?? [];
   const lastAt = banks.map((b) => b.lastSyncAt).filter((d): d is string => !!d).sort().at(-1) ?? null;
   const run: Run = banks.some((b) => b.status === "error") ? { failed: true, at: lastAt } : lastAt ? { failed: false, at: lastAt } : null;
   const refresh = () => {
@@ -78,15 +80,19 @@ export function SimpleHome({ name, cardOnly, extra, heroAside }: { name?: string
   const ready = txns.data && overview.data && cats.data && budgets.data;
   const cf = ready ? buildCashflow(txns.data!, cats.data!, budgets.data!, overview.data!, { from: first, to: last }) : null;
   // Anything that isn't a fixed bill or savings can be tracked (variable and unplanned alike); parents roll up their children.
-  const parentIds = new Set((cats.data ?? []).map((c) => c.parentId).filter((x): x is number => x != null));
-  const trackable = (cats.data ?? []).filter((c) => c.kind === "expense" && c.costType !== "fixed" && c.needType !== "saving" && !parentIds.has(c.id));
+  // Only top-level categories can be tracked: sub-category spending rolls into its parent, so the list stays short.
+  const trackable = (cats.data ?? []).filter((c) => c.kind === "expense" && c.costType !== "fixed" && c.needType !== "saving" && c.parentId == null);
   const groups = assets.data ? wealthGroups(assets.data.assets) : null;
   const wealth = groups ? (Object.keys(groups) as WealthGroup[]).filter((g) => groups[g].value > 0) : [];
 
   return (
-    <div className={cardOnly ? "" : "mx-auto max-w-md lg:max-w-6xl"}>
-      {/* Menu and quick-add (opens the add sheet on Transactions); the month picker lives in the card below. */}
-      <div className="mb-2 flex items-center justify-between gap-2">{!cardOnly ? <SimpleMenu name={name} run={run} /> : <span />}<Link href="/transactions?add=1" className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Plus className="size-4" aria-hidden />{tManual("addTitle")}</Link></div>
+    <div className={cardOnly ? "" : "mx-auto w-full max-w-md md:max-w-2xl lg:max-w-6xl"}>
+      {/* One quick-add line; the menu itself lives in the page's top corner, so nothing more sits above the card. */}
+      {!cardOnly && (
+        <div className="mb-1 flex items-center justify-end md:hidden">
+          <Link href="/transactions?add=1" className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-footnote font-medium text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><Plus className="size-4" aria-hidden />{tManual("addTitle")}</Link>
+        </div>
+      )}
       {failed ? (
         <Card>
           <div role="alert" className="flex flex-col items-start gap-3 p-5 sm:p-6">
@@ -112,11 +118,9 @@ export function SimpleHome({ name, cardOnly, extra, heroAside }: { name?: string
           </>
         );
 
-        // Every cash-flow line once; phones render them as cards, desktop as a chart plus one detail panel.
-        // Every picked category stays (₪0 included); with many, the smallest fold into one "more" line.
-        const rows = trackedRows(cf.tracked);
-        const tracked: LineView[] = rows.shown
-          .map((c) => ({
+        // Categories are a heat map, not a list: the shape of the month at a glance, one tap for the detail.
+        // Every picked category stays (₪0 included), so nothing vanishes silently.
+        const tracked: LineView[] = cf.tracked.map((c) => ({
             key: `cat-${c.id}`, title: catName(c.name), tone: c.color, spent: c.spent, expected: c.expected,
             spentLabel: t("spent"), expectedLabel: t("expected"), showLeft: true,
             menu: (
@@ -132,14 +136,6 @@ export function SimpleHome({ name, cardOnly, extra, heroAside }: { name?: string
               ...(c.items.length ? [{ label: t("details"), content: <Items items={c.items} /> }] : []),
             ],
           }));
-        if (rows.rest.length) {
-          const sum = (k: "spent" | "expected") => rows.rest.reduce((s, c) => s + c[k], 0);
-          tracked.push({
-            key: "more", title: t("moreCategories", { count: rows.rest.length }), tone: "var(--chart-4)",
-            spent: sum("spent"), expected: sum("expected"), spentLabel: t("spent"), expectedLabel: t("expected"),
-            sections: [{ label: t("details"), content: <CompactRows rows={rows.rest.map((c) => ({ id: c.id, name: catName(c.name), spent: c.spent, expected: c.expected, tone: c.color }))} /> }],
-          });
-        }
         const variableLine: LineView = {
           key: "variable", title: t("variable"), tone: "var(--chart-1)", spent: cf.variable.spent, expected: cf.variable.expected,
           spentLabel: t("spent"), expectedLabel: t("recommended"), sections: [{ label: t("byWeek"), content: <WeeksList weeks={cf.weeks} /> }],
@@ -171,43 +167,69 @@ export function SimpleHome({ name, cardOnly, extra, heroAside }: { name?: string
             { label: t("offExpenses"), total: cf.off.expenseTotal, content: <Items items={cf.off.expenses} /> },
           ],
         };
-        const lines = [variableLine, ...tracked, savingsLine, fixedLine, incomeLine, offLine];
-        const current = lines.find((l) => l.key === selected) ?? variableLine;
+        // The map sorts biggest first and can be narrowed, so a household with many categories still finds one.
+        const overLine = (l: LineView) => !!l.showLeft && l.expected > 0 && l.spent > l.expected;
+        const visible = (list: LineView[]) =>
+          list
+            .filter((l) => (chartFilter === "all" ? true : chartFilter === "over" ? overLine(l) : l.spent > 0))
+            .sort((a, b) => (chartSort === "name" ? a.title.localeCompare(b.title, locale) : chartDesc ? b.spent - a.spent : a.spent - b.spent));
+        // One map for every kind of line: the categories, then the month's flows (variable, savings, fixed, income, off).
+        const categoryLines = visible(tracked);
+        const flowLines = [variableLine, savingsLine, fixedLine, incomeLine, offLine]
+          .filter((l) => (chartFilter === "all" ? true : chartFilter === "over" ? overLine(l) : l.spent > 0));
+        const heatLines = [...categoryLines, ...flowLines];
+        const current = heatLines.find((l) => l.key === selected) ?? heatLines[0] ?? null;
 
         const spentPct = cf.totalExpected > 0 ? Math.min(100, (cf.totalSpent / cf.totalExpected) * 100) : cf.totalSpent > 0 ? 100 : 0;
         const hero = (
           // Same frame as the Budget and Overview heroes (.studio-overview): 28/30px padding, 28px corners, month on the end side.
           <section className="wallet shrink-0 overflow-hidden rounded-3xl px-5 pb-4 pt-[22px] shadow-sm min-[600px]:rounded-[28px] min-[600px]:px-[30px] min-[600px]:pb-5 min-[600px]:pt-7">
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-footnote text-muted-foreground">
-              <span className="min-w-0 truncate">{name && !cardOnly ? t("hi", { name }) : <SyncLine run={run} />}</span>
-              {monthNav}
-            </div>
-            {name && !cardOnly && <div className="mt-1 text-footnote text-muted-foreground"><SyncLine run={run} /></div>}
-            <div className="hero-with-aside"><div className="min-w-0 flex-1">
-            <h2 className="mt-4 text-sm font-medium text-pretty">{t(offset === 0 ? "forecastTitle" : "endedTitle", { month: monthName })}</h2>
-            {cf.forecast < 0 && <p className="mt-2 flex items-center gap-1 text-footnote font-medium text-status-heads-up"><AlertCircle className="size-4 shrink-0" aria-hidden />{t("forecastShort")}</p>}
-            <p className={`studio-amount figure ${cf.forecast < 0 ? "text-status-heads-up" : ""}`}>
-              <Signed n={cf.forecast} />
-            </p>
-            {offset === 0 && <BalancePill bank={cash.data?.bank ?? null} accounts={cash.data?.accounts ?? []} />}
-            </div>{heroAside && <div className="hero-aside">{heroAside}</div>}</div>
-            <div className="mt-5">
-              <div className="flex items-baseline justify-between gap-3 text-footnote">
-                <span className="text-muted-foreground">{t("spentSoFar")}</span>
-                <span className="tabular-nums"><bdi className="font-semibold">{formatCurrency(cf.totalSpent)}</bdi> / <bdi className="text-muted-foreground">{formatCurrency(cf.totalExpected)}</bdi></span>
+            {/* Wide screens: the figure on one side, this month's detail on the other, split by a hairline. */}
+            {/* Two columns only when there is a second one to fill: Simple mode keeps the figure across the card. */}
+            <div className={cn("lg:items-start", cardOnly && extra ? "lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-x-12" : "")}>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-footnote text-muted-foreground">
+                  <span className="min-w-0 truncate">{name && !cardOnly ? t("hi", { name }) : <SyncLine run={run} />}</span>
+                  {monthNav}
+                </div>
+                {name && !cardOnly && <div className="mt-1 text-footnote text-muted-foreground"><SyncLine run={run} /></div>}
+                {/* Wide screens in Simple mode: the figure on one side, this month's meter on the other. Advanced keeps the figure whole beside its next step. */}
+                <div className={cn("lg:items-end", !cardOnly && "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-x-10")}>
+                <div className="hero-with-aside"><div className="min-w-0 flex-1">
+                <h2 className="mt-4 text-sm font-medium text-pretty">{t(offset === 0 ? "forecastTitle" : "endedTitle", { month: monthName })}</h2>
+                {cf.forecast < 0 && <p className="mt-2 flex items-center gap-1 text-footnote font-medium text-status-heads-up"><AlertCircle className="size-4 shrink-0" aria-hidden />{t("forecastShort")}</p>}
+                <p className={`studio-amount figure ${cf.forecast < 0 ? "text-status-heads-up" : ""}`}>
+                  <Signed n={cf.forecast} />
+                </p>
+                {offset === 0 && <BalancePill bank={cash.data?.bank ?? null} accounts={cash.data?.accounts ?? []} />}
+                </div>{heroAside && <div className="hero-aside">{heroAside}</div>}</div>
+                <div className="mt-5 lg:mt-0 lg:pb-1">
+                  <div className="flex items-baseline justify-between gap-3 text-footnote">
+                    <span className="text-muted-foreground">{t("spentSoFar")}</span>
+                    <span className="tabular-nums"><bdi className="font-semibold">{formatCurrency(cf.totalSpent)}</bdi> / <bdi className="text-muted-foreground">{formatCurrency(cf.totalExpected)}</bdi></span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/15" role="progressbar"
+                    aria-valuenow={Math.round(spentPct)} aria-valuemin={0} aria-valuemax={100} aria-label={t("spentSoFar")}
+                    aria-valuetext={t("meterText", { spent: formatCurrency(cf.totalSpent), expected: formatCurrency(cf.totalExpected) })}>
+                    <div className="h-full rounded-full transition-[width] duration-500 ease-out" style={{ width: `${spentPct}%`, background: `linear-gradient(90deg, ${RING.spending}, #ffb38a)` }} />
+                  </div>
+                </div>
+                </div>
               </div>
-              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/15" role="progressbar"
-                aria-valuenow={Math.round(spentPct)} aria-valuemin={0} aria-valuemax={100} aria-label={t("spentSoFar")}
-                aria-valuetext={t("meterText", { spent: formatCurrency(cf.totalSpent), expected: formatCurrency(cf.totalExpected) })}>
-                <div className="h-full rounded-full" style={{ width: `${spentPct}%`, background: RING.spending }} />
-              </div>
+              {/* Simple mode keeps the purple card to the numbers alone; Advanced borrows it with its next step. */}
+              {cardOnly && extra && (
+                <div className="mt-5 lg:mt-1 lg:border-s lg:border-white/15 lg:ps-8">
+                  {extra}
+                </div>
+              )}
             </div>
-            {extra}
+            {/* Full width under both columns: twelve months need the room. */}
             <MonthStrip value={month} onChange={goMonth} max={thisMonth} />
           </section>
         );
         const trackButton = (
           <TrackPicker
+            compact
             options={trackable.map((c) => ({ id: c.id, name: catName(c.name), on: c.budgetMode === "budgeted" }))}
             onChange={(ids, on) => {
               if (on && ids.length === 1) setSelected(`cat-${ids[0]}`);
@@ -215,45 +237,59 @@ export function SimpleHome({ name, cardOnly, extra, heroAside }: { name?: string
             }}
           />
         );
-        const panel = (l: LineView) => (
+        // Every section, weeks included, stays closed until it is asked for.
+        const panel = (l: LineView, openFirst = false) => (
           <>
             <Head title={l.title}>{l.menu}</Head>
             {!l.noMeter && <Meter title={l.title} spent={l.spent} expected={l.expected} spentLabel={l.spentLabel} expectedLabel={l.expectedLabel} tone={l.tone} showLeft={l.showLeft} />}
             {l.noMeter && <div className="h-3" />}
-            {l.sections.map((s) => <Expand key={s.label} id={`home.${l.key}.${s.label}`} label={s.label} total={s.total}>{s.content}</Expand>)}
+            {l.sections.map((s, i) => <Expand key={s.label} id={`home.${l.key}.${s.label}`} label={s.label} total={s.total} defaultOpen={openFirst && i === 0}>{s.content}</Expand>)}
           </>
         );
-        const card = (l: LineView) => <Card key={l.key}>{panel(l)}</Card>;
-
         // Advanced mode borrows just the forecast card.
         if (cardOnly) return <div className="mb-6 md:mb-8">{hero}</div>;
 
         return (
           <>
-            {/* Phone and tablet: one scrolling column. */}
-            <div className="space-y-3 lg:hidden">
-              {hero}
-              {[variableLine, ...tracked].map((l) => card(l))}
-              {trackButton}
-              {[savingsLine, fixedLine, incomeLine, offLine].map((l) => card(l))}
-            </div>
-
-            {/* Desktop, top to bottom: the forecast card, the chart across the full width so every column fits one row,
-                then the picked line's detail. No fixed viewport height: the taller hero squeezed the chart and panel to nothing. */}
-            <div className="hidden lg:flex lg:flex-col lg:gap-3">
-              {hero}
-              <Card>
-                <div className="px-3 pt-3">
-                  <div className="flex items-center justify-between gap-4 px-2">
-                    <h2 className="text-headline font-semibold">{t("linesTitle")}</h2>
-                    <div className="w-fit shrink-0 whitespace-nowrap">{trackButton}</div>
+            {hero}
+            {/* One heat map for the whole month: categories, then this month's flows. Tapping a tile opens its detail. */}
+            <div className="mt-2.5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)] lg:items-start lg:gap-3">
+              <div className="rounded-2xl border border-border/60 bg-card p-2">
+                <div className="flex items-center justify-between gap-2 px-0.5 pb-1.5">
+                  <h2 className="text-footnote font-medium text-muted-foreground">{t("linesTitle")}</h2>
+                  <div className="flex items-center gap-0.5">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger aria-label={t("filterLabel")} className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+                        <SlidersHorizontal className="size-4" aria-hidden />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuRadioGroup value={chartFilter} onValueChange={(v) => setChartFilter(v as typeof chartFilter)}>
+                          <DropdownMenuRadioItem value="all">{t("filterAll")}</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="over">{t("filterOver")}</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="active">{t("filterActive")}</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuRadioGroup value={chartSort === "name" ? "name" : chartDesc ? "desc" : "asc"} onValueChange={(v) => { if (v === "name") setChartSort("name"); else { setChartSort("amount"); setChartDesc(v === "desc"); } }}>
+                          <DropdownMenuRadioItem value="desc">{t("sortAmountDesc")}</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="asc">{t("sortAmountAsc")}</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="name">{t("sortName")}</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {trackButton}
                   </div>
-                  <LinesChart lines={lines} selected={current.key} onSelect={setSelected} label={t("linesTitle")} />
                 </div>
-              </Card>
-              <section aria-live="polite" aria-label={current.title} className="overflow-hidden rounded-2xl border border-border/60 bg-card pb-2">
-                <div key={current.key}>{panel(current)}</div>
-              </section>
+                {heatLines.length === 0 ? (
+                  <p className="px-2 py-6 text-center text-footnote text-muted-foreground">{t("noLines")}</p>
+                ) : (
+                  <HeatMap lines={heatLines} split={categoryLines.length} selected={current?.key ?? ""} onSelect={setSelected} label={t("linesTitle")} />
+                )}
+              </div>
+              {current && (
+                <section aria-live="polite" aria-label={current.title} className="mt-2.5 rounded-2xl border border-border/60 bg-card pb-1 lg:sticky lg:top-3 lg:mt-0">
+                  <div key={current.key}>{panel(current)}</div>
+                </section>
+              )}
             </div>
           </>
         );
@@ -269,29 +305,46 @@ type LineView = {
   sections: { label: string; total?: number; content: React.ReactNode }[];
 };
 
-/** One column per cash-flow line: the track is what's expected, the fill is what happened. Click to open it below. */
-function LinesChart({ lines, selected, onSelect, label }: { lines: LineView[]; selected: string; onSelect: (k: string) => void; label: string }) {
+/**
+ * Spend as a heat map: every category is a tile, tinted by how much of the biggest spend it carries, so a
+ * household with twenty categories sees the shape of the month at once and opens one with a tap.
+ */
+function HeatMap({ lines, split = 0, selected, onSelect, label }: { lines: LineView[]; split?: number; selected: string; onSelect: (k: string) => void; label: string }) {
   const formatCurrency = useMoney();
+  // Categories first, then the month's flows; the hairline keeps the two kinds apart without another heading.
+  const groups = split > 0 && split < lines.length ? [lines.slice(0, split), lines.slice(split)] : [lines];
   return (
-    <div role="group" aria-label={label} className="grid grid-cols-[repeat(auto-fit,minmax(4.5rem,1fr))] gap-1 px-1 pb-2 pt-2">
-      {lines.map((l) => {
-        const sel = l.key === selected;
-        const pct = l.expected > 0 ? Math.min(100, (l.spent / l.expected) * 100) : l.spent > 0 ? 100 : 0;
-        const over = l.showLeft && l.expected > 0 && l.spent > l.expected;
+    <div role="group" aria-label={label} className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      {groups.map((group, gi) => {
+        // Intensity is scaled per group: income is always the biggest number, and one shared scale washed every category tile out.
+        const top = Math.max(...group.map((g) => g.spent), 1);
         return (
-          <button
-            key={l.key}
-            type="button"
-            aria-pressed={sel}
-            onClick={() => onSelect(l.key)}
-            className={`flex h-28 min-w-0 flex-col items-center gap-1 rounded-xl px-1.5 pb-1.5 pt-2 transition-colors focus-visible:outline-2 focus-visible:outline-ring ${sel ? "bg-accent ring-1 ring-primary/30" : "hover:bg-accent/60"}`}
-          >
-            <bdi className="text-xs font-semibold tabular-nums">{formatCurrency(l.spent)}</bdi>
-            <span className="relative flex w-7 flex-1 items-end overflow-hidden rounded-lg" style={{ background: `color-mix(in oklab, ${l.tone} 26%, transparent)` }} aria-hidden>
-              <span className="w-full rounded-lg transition-[height] duration-500" style={{ height: `${pct}%`, background: over ? "var(--status-over)" : l.tone }} />
-            </span>
-            <span className={`line-clamp-2 w-full break-words text-center text-xs leading-tight ${sel ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{l.title}</span>
-          </button>
+        <Fragment key={gi}>
+          {gi > 0 && <div aria-hidden className="col-span-full my-0.5 h-px bg-border/70" />}
+          {group.map((l) => {
+            const sel = l.key === selected;
+            const share = Math.max(0, Math.min(1, l.spent / top));
+            const over = !!l.showLeft && l.expected > 0 && l.spent > l.expected;
+            const tint = over ? "var(--status-over)" : l.tone;
+            return (
+              <button
+                key={l.key}
+                type="button"
+                aria-pressed={sel}
+                aria-label={l.title + ": " + formatCurrency(l.spent)}
+                onClick={() => onSelect(l.key)}
+                className={cn(
+                  "flex flex-col gap-0.5 rounded-lg px-2 py-1.5 text-start transition-transform duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-ring",
+                  sel ? "ring-2 ring-primary" : "",
+                )}
+                style={{ background: "color-mix(in oklab, " + tint + " " + (6 + Math.round(share * 34)) + "%, var(--card))" }}
+              >
+                <span className="truncate text-[11px] leading-4 text-foreground/85">{l.title}</span>
+                <bdi className="truncate text-xs font-semibold tabular-nums">{formatCurrency(l.spent)}</bdi>
+              </button>
+            );
+          })}
+        </Fragment>
         );
       })}
     </div>
@@ -299,7 +352,7 @@ function LinesChart({ lines, selected, onSelect, label }: { lines: LineView[]; s
 }
 
 /** Which categories get their own row: searchable checklist with select/clear all and a count. */
-function TrackPicker({ options, onChange }: { options: { id: number; name: string; on: boolean }[]; onChange: (ids: number[], on: boolean) => void }) {
+function TrackPicker({ options, onChange, compact }: { options: { id: number; name: string; on: boolean }[]; onChange: (ids: number[], on: boolean) => void; compact?: boolean }) {
   const t = useTranslations("home.simple");
   const [q, setQ] = useState("");
   const count = options.filter((o) => o.on).length;
@@ -307,9 +360,16 @@ function TrackPicker({ options, onChange }: { options: { id: number; name: strin
   const bulk = (on: boolean) => { const ids = shown.filter((o) => o.on !== on).map((o) => o.id); if (ids.length) onChange(ids, on); };
   return (
     <Popover>
-      <PopoverTrigger className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card/40 px-4 text-sm font-medium text-primary hover:bg-accent disabled:opacity-50 max-lg:min-h-14" disabled={options.length === 0}>
-        <Plus className="size-4" aria-hidden /> {t("trackCategory")}
-        {count > 0 && <span className="rounded-full bg-primary/10 px-2 text-xs tabular-nums">{count}</span>}
+      <PopoverTrigger
+        aria-label={t("trackCategory")}
+        className={compact
+          ? "relative grid size-9 place-items-center rounded-full text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
+          : "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card/40 px-4 text-sm font-medium text-primary hover:bg-accent disabled:opacity-50 max-lg:min-h-14"}
+        disabled={options.length === 0}>
+        <Plus className="size-4" aria-hidden /> {!compact && t("trackCategory")}
+        {count > 0 && (compact
+          ? <span aria-hidden className="absolute -end-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground tabular-nums">{count}</span>
+          : <span className="rounded-full bg-primary/10 px-2 text-xs tabular-nums">{count}</span>)}
       </PopoverTrigger>
       <PopoverContent className="flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 p-3">
         <div className="relative">
@@ -337,29 +397,6 @@ function TrackPicker({ options, onChange }: { options: { id: number; name: strin
         </ul>
       </PopoverContent>
     </Popover>
-  );
-}
-
-/** Folded categories: one compact line each; ₪0 ones stay, dimmed, so nothing vanishes silently. */
-function CompactRows({ rows }: { rows: { id: number; name: string; spent: number; expected: number; tone: string }[] }) {
-  const formatCurrency = useMoney();
-  return (
-    <ul className="divide-y divide-border pb-1 text-sm">
-      {rows.map((r) => {
-        const pct = r.expected > 0 ? Math.min(100, (r.spent / r.expected) * 100) : r.spent > 0 ? 100 : 0;
-        return (
-          <li key={r.id} className={`py-2 ${r.spent === 0 ? "text-muted-foreground" : ""}`}>
-            <div className="flex items-baseline justify-between gap-3">
-              <bdi className="min-w-0 truncate">{r.name}</bdi>
-              <span className="shrink-0 tabular-nums"><bdi>{formatCurrency(r.spent)}</bdi>{r.expected > 0 && <span className="text-xs text-muted-foreground"> / <bdi>{formatCurrency(r.expected)}</bdi></span>}</span>
-            </div>
-            <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
-              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: r.spent > r.expected && r.expected > 0 ? "var(--status-over)" : r.tone }} />
-            </div>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
@@ -495,48 +532,6 @@ function SyncLine({ run }: { run: Run }) {
   return <span>{t("updated", { when: at.toLocaleString(locale, { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) })}</span>;
 }
 
-/** ☰: everything Simple mode needs that is not on the page. */
-function SimpleMenu({ name, run }: { name?: string | null; run: Run }) {
-  const t = useTranslations("home.simple");
-  const { update } = usePlan();
-  const links: [string, string, typeof Landmark][] = [
-    ["/settings/bank", t("menuAccounts"), Landmark],
-    ["/settings/general", t("menuStartDay"), CalendarDays],
-    ["/settings/categories", t("menuCategories"), Tags],
-    ["/transactions", t("menuTransactions"), ArrowLeftRight],
-    ["/investments", t("menuSavings"), PiggyBank],
-    ["/settings", t("menuSettings"), Settings],
-  ];
-  return (
-    <Sheet>
-      <SheetTrigger className="grid size-11 place-items-center rounded-full hover:bg-accent" aria-label={t("menu")}>
-        <Menu className="h-5 w-5" aria-hidden />
-      </SheetTrigger>
-      {/* "left" is the start side in this Sheet: right in Hebrew, left in English, next to the ☰. */}
-      <SheetContent side="left" className="w-80 max-w-full">
-        <SheetHeader>
-          <SheetTitle>{name || t("menu")}</SheetTitle>
-          <div className="text-xs text-muted-foreground"><SyncLine run={run} /></div>
-        </SheetHeader>
-        <nav className="flex flex-col px-2">
-          {links.map(([href, label, Icon]) => (
-            <Link key={href} href={href} className="flex min-h-12 items-center gap-3 rounded-xl px-3 hover:bg-accent">
-              <Icon className="size-5 shrink-0 text-primary" aria-hidden />
-              <span className="flex-1">{label}</span>
-              <Forward className="text-muted-foreground" />
-            </Link>
-          ))}
-          <button type="button" className="mt-3 flex min-h-12 items-center gap-3 rounded-xl border border-border px-3 text-start hover:bg-accent" onClick={() => void update({ simpleMode: false })}>
-            <SlidersHorizontal className="size-5 shrink-0 text-primary" aria-hidden />
-            {t("toAdvanced")}
-          </button>
-        </nav>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-
 function Meter({ title, spent, expected, spentLabel, expectedLabel, tone, showLeft }: {
   title: string; spent: number; expected: number; spentLabel: string; expectedLabel: string; tone: string; showLeft?: boolean;
 }) {
@@ -615,16 +610,27 @@ function WeeksList({ weeks }: { weeks: Week[] }) {
   );
 }
 
-/** A card's section, always shown: a label row, then its content. */
-function Expand({ label, total, children }: { id: string; label: string; total?: number; children: React.ReactNode }) {
+/** A card's section: a label row that opens it, so a long page stays a list of headlines. */
+function Expand({ label, total, defaultOpen, children }: { id: string; label: string; total?: number; defaultOpen?: boolean; children: React.ReactNode }) {
   const formatCurrency = useMoney();
+  const [open, setOpen] = useState(!!defaultOpen);
+  const id = useId();
   return (
     <section className="border-t border-border">
-      <h3 className="flex min-h-12 items-center justify-between px-5 text-sm font-medium sm:px-6">
-        <span>{label}</span>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((o) => !o)}
+        className="flex min-h-12 w-full items-center justify-between gap-3 px-5 text-sm font-medium transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-ring sm:px-6"
+      >
+        <span className="flex items-center gap-1.5">
+          <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")} aria-hidden />
+          {label}
+        </span>
         {total != null && <bdi className="font-normal tabular-nums">{formatCurrency(total)}</bdi>}
-      </h3>
-      <div className="px-5 sm:px-6">{children}</div>
+      </button>
+      {open && <div id={id} className="px-5 sm:px-6">{children}</div>}
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getDb } from "@/server/db";
+import { getPlan } from "@/server/db/queries/plan";
 import { getWorkspaceIdFromRequest } from "@/server/lib/workspace-context";
 import { israelToday } from "@/server/lib/date-utils";
 import { loadInsights } from "@/server/insights/data";
@@ -9,6 +10,7 @@ import { normalizeMerchant } from "@/server/rules/normalize";
 import { askAI } from "@/server/ai/ask";
 import { GET as cashAheadGET } from "../cash-ahead/route";
 import { parseQuestion, periodLabel, type AskAnswer, type AskCategory } from "@/lib/ask";
+import { budgetMonthRange } from "@/lib/finance-period";
 import { shekels } from "@/lib/money";
 import he from "@/i18n/messages/he.json";
 import en from "@/i18n/messages/en.json";
@@ -20,7 +22,6 @@ const day = (y: number, m: number, d: number) => new Intl.DateTimeFormat("en-CA"
 const HE_CATS = he.categoriesSeeded as Record<string, string>;
 const EN_CATS = en.categoriesSeeded as Record<string, string>;
 
-// shortcut: calendar periods, ignoring the plan's monthStartDay (same as /api/recap).
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { question?: unknown } | null;
   const question = typeof body?.question === "string" ? body.question.trim().slice(0, 300) : "";
@@ -32,13 +33,14 @@ export async function POST(request: Request) {
   const tCat = (name: string) => (locale === "he" ? HE_CATS : EN_CATS)[name] ?? name;
   const money = (n: number) => shekels(n, locale);
   const db = getDb();
+  const startDay = getPlan(ws).monthStartDay;
   const todayIso = israelToday();
   const today = new Date(`${todayIso}T12:00:00`);
 
   const catRows = db.prepare("SELECT id, name, parent_id as parentId FROM categories WHERE workspace_id = ?").all(ws) as { id: number; name: string; parentId: number | null }[];
   const categories: AskCategory[] = catRows.map((c) => ({ id: c.id, names: [c.name, HE_CATS[c.name] ?? c.name, EN_CATS[c.name] ?? c.name] }));
   const descriptions = (db.prepare("SELECT DISTINCT description FROM transactions WHERE workspace_id = ? LIMIT 5000").all(ws) as { description: string }[]).map((r) => r.description);
-  const parsed = parseQuestion(question, today, categories, descriptions);
+  const parsed = parseQuestion(question, today, categories, descriptions, startDay);
   const { from, to } = parsed.period;
   const range = [ws, from, `${to}T23:59:59`];
   const period = periodLabel(parsed.period, locale);
@@ -111,7 +113,7 @@ export async function POST(request: Request) {
     case "subscriptions": {
       const perMonth = { weekly: 52 / 12, monthly: 1, yearly: 1 / 12 };
       const subs = loadInsights(ws, todayIso)
-        .series.filter((s) => isActive(s, todayIso))
+        .series.filter((s) => s.status === "suggested" && isActive(s, todayIso)) // same list as the insights page
         .map((s) => ({ ...s, monthly: Math.abs(s.expectedAmount) * perMonth[s.cadence] }))
         .sort((a, b) => b.monthly - a.monthly);
       const monthly = subs.reduce((s, x) => s + x.monthly, 0);
@@ -124,10 +126,10 @@ export async function POST(request: Request) {
     }
 
     case "savings": {
-      // Without a named period: the last 6 complete months, so a half-done month doesn't skew it.
+      // Without a named period: the last 6 complete household months, so a half-done month doesn't skew it.
       const p = parsed.period.explicit
         ? parsed.period
-        : { from: day(today.getFullYear(), today.getMonth() - 6, 1), to: day(today.getFullYear(), today.getMonth(), 0) };
+        : { from: budgetMonthRange(startDay, todayIso, -6).from, to: budgetMonthRange(startDay, todayIso, -1).to };
       const months = Math.max(1, (Number(p.to.slice(0, 4)) - Number(p.from.slice(0, 4))) * 12 + Number(p.to.slice(5, 7)) - Number(p.from.slice(5, 7)) + 1);
       const r = db
         .prepare(`SELECT COALESCE(SUM(CASE WHEN t.kind = 'income' THEN t.charged_amount END), 0) as income, COALESCE(-SUM(CASE WHEN t.kind = 'expense' THEN t.charged_amount END), 0) as spent FROM transactions t WHERE ${BASE}`)

@@ -63,7 +63,7 @@ export type InstallKind = "desktop" | "docker" | "source";
 export const installKind = (v: string | undefined): InstallKind => (v === "desktop" || v === "docker" ? v : "source");
 
 export const HOW_TO_UPDATE: Record<InstallKind, string> = {
-  desktop: "To update, download the new installer from the release page (.exe for Windows, .dmg for Mac) and run it. Your data stays.",
+  desktop: "On Windows, Penny downloads the update itself and asks to restart. On Mac, download the new .dmg from the release page and open it. Your data stays.",
   docker: "To update, run Penny-update.bat (Windows) or ./Penny-update.sh (Mac, Linux). It backs up your data first and keeps the current version if the new one fails its tests.",
   source: "To update, run git pull and restart Penny.",
 };

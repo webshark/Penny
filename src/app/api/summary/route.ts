@@ -8,23 +8,20 @@ import {
   getCategorySpendInRange,
   getTopMerchantPerCategory,
   getNeedsReviewCountByCategory,
+  getUncategorizedSpend,
 } from "@/server/db/queries/transactions";
 import { getAllCategories } from "@/server/db/queries/categories";
-import {
-  getAllBudgets,
-  getAutoBudgetAverage,
-} from "@/server/db/queries/budgets";
+import { getAutoBudgetAverage } from "@/server/db/queries/budgets";
+import { getEffectiveBudgets } from "@/server/db/queries/budget-periods";
+import { getPlan } from "@/server/db/queries/plan";
 import { getWorkspaceSetting } from "@/server/db/queries/settings";
 import { getWorkspaceIdFromRequest } from "@/server/lib/workspace-context";
-import {
-  computeStatus,
-  daysInMonth,
-  dayWithinMonth,
-  daysUntil,
-  nextPayday,
-  pacePhrase,
-} from "@/server/lib/pace";
-import { toLocalISODate } from "@/server/lib/date-utils";
+import { ownerScopeFromParam } from "@/server/lib/account-owners";
+import { runWithOwner } from "@/server/lib/owner-scope";
+import { computeStatus, daysUntil, nextPayday, pacePhrase } from "@/server/lib/pace";
+import { budgetMonthByKey, budgetMonthRange, elapsedPercent, shiftBudgetMonthKey } from "@/lib/finance-period";
+import { israelToday } from "@/server/lib/date-utils";
+import { cashBetween } from "@/server/finance/facts";
 import type { BudgetSource, CategoryWithData } from "@/lib/types";
 
 function parseISODate(s: string): Date {
@@ -32,43 +29,49 @@ function parseISODate(s: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
+/** ?owner= scopes the spend figures to one household member; budgets stay the household's. */
 export async function GET(request: Request) {
+  const scope = ownerScopeFromParam(getWorkspaceIdFromRequest(request), new URL(request.url).searchParams.get("owner"));
+  return runWithOwner(scope, () => summary(request));
+}
+
+async function summary(request: Request) {
   const workspaceId = getWorkspaceIdFromRequest(request);
   const { searchParams } = new URL(request.url);
-  const now = new Date();
-  const defaultFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const defaultTo = toLocalISODate(
-    new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  );
+  const startDay = getPlan(workspaceId).monthStartDay;
+  const todayIso = israelToday();
 
-  const from = searchParams.get("from") ?? defaultFrom;
-  const to = searchParams.get("to") ?? defaultTo;
-  const months = Number(searchParams.get("months") ?? "12");
+  // The household month starts on the plan's monthStartDay, not on the 1st. `from` still chooses
+  // which month, so the dashboard's picker keeps working while the dates follow the plan.
+  const requested = searchParams.get("from");
+  const requestedKey = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested.slice(0, 7) : null;
+  const key = requestedKey ?? budgetMonthRange(startDay, todayIso).key;
+  const range = budgetMonthByKey(startDay, key);
+  const from = range.from;
+  const to = range.to;
+  const monthsRaw = Number(searchParams.get("months") ?? "12");
+  const months = Number.isFinite(monthsRaw)
+    ? Math.min(Math.max(Math.trunc(monthsRaw), 1), 36)
+    : 12;
 
   const fromDate = parseISODate(from);
   const monthLabel = fromDate.toLocaleDateString("en-US", { month: "long" });
-  const year = fromDate.getFullYear();
-  const month = fromDate.getMonth();
-  const totalDays = daysInMonth(year, month);
-  const today = new Date();
-  const elapsedDays = Math.max(1, dayWithinMonth(today, year, month));
-  const timeElapsedPercent = Math.min(100, (elapsedDays / totalDays) * 100);
+  const today = new Date(`${todayIso}T12:00:00`);
+  const timeElapsedPercent = elapsedPercent(todayIso, from, to);
 
-  const paydayDay = Number(getWorkspaceSetting(workspaceId, "payday_day") ?? "1");
-  const payday = nextPayday(today, paydayDay);
+  const payday = nextPayday(today, startDay);
   const daysUntilPayday = Math.max(0, daysUntil(payday));
 
-  // Compute previous month's range
-  const prevMonthStart = new Date(year, month - 1, 1);
-  const prevMonthEnd = new Date(year, month, 0);
-  const prevFrom = toLocalISODate(prevMonthStart);
-  const prevTo = toLocalISODate(prevMonthEnd);
+  const previous = budgetMonthByKey(startDay, shiftBudgetMonthKey(key, -1));
+  const prevFrom = previous.from;
+  const prevTo = previous.to;
 
   const categories = getAllCategories(workspaceId, "expense");
   const currentSpend = getCategorySpendInRange(workspaceId, from, to);
   const prevSpend = getCategorySpendInRange(workspaceId, prevFrom, prevTo);
   const topMerchants = getTopMerchantPerCategory(workspaceId, from, to);
-  const explicitBudgets = getAllBudgets(workspaceId);
+  // Base plus carry-in plus moves for this household month, never the raw default.
+  const effectiveBudgets = getEffectiveBudgets(workspaceId, range, startDay);
   const needsReviewCounts = getNeedsReviewCountByCategory(workspaceId, from, to);
   const needsReviewMap = new Map(
     needsReviewCounts.map((r) => [r.categoryId, r.count])
@@ -79,9 +82,7 @@ export async function GET(request: Request) {
   const topMerchantMap = new Map(
     topMerchants.map((m) => [m.categoryId, m])
   );
-  const budgetMap = new Map(
-    explicitBudgets.map((b) => [b.categoryId, b])
-  );
+  const budgetMap = effectiveBudgets;
 
   // Identify parents (any category that is referenced as parent_id by at
   // least one other category). Parents get synthetic rollup rows.
@@ -139,7 +140,7 @@ export async function GET(request: Request) {
     }
 
     const explicit = budgetMap.get(cat.id);
-    const budget = explicit?.monthlyAmount ?? 0;
+    const budget = explicit?.budget ?? 0;
     const remaining = Math.max(0, budget - spent);
     const perDayRemaining =
       daysUntilPayday > 0 && remaining > 0
@@ -221,12 +222,14 @@ export async function GET(request: Request) {
     // Budget: parent has its own explicit budget when in "budgeted" mode AND
     // a budget row exists for it. Otherwise roll up sum of budgeted children.
     const ownExplicit = budgetMap.get(parent.id);
-    const usesOwn =
-      parent.budgetMode === "budgeted" && ownExplicit !== undefined;
+    const hasOwn =
+      ownExplicit !== undefined &&
+      (ownExplicit.base > 0 || ownExplicit.carryIn !== 0 || ownExplicit.moves !== 0);
+    const usesOwn = parent.budgetMode === "budgeted" && hasOwn;
     let budget = 0;
     let budgetSource: BudgetSource = "rollup";
     if (usesOwn && ownExplicit) {
-      budget = ownExplicit.monthlyAmount;
+      budget = ownExplicit.budget;
       budgetSource = "own";
     } else {
       budget = kidRows.reduce(
@@ -319,12 +322,15 @@ export async function GET(request: Request) {
     categoryBreakdown: getCategoryBreakdown(workspaceId, from, to),
     // New fields for the budgets dashboard:
     categoriesWithData,
+    // Spending with no category never reaches a category card; the budget screen shows it as its own row.
+    uncategorized: getUncategorizedSpend(workspaceId, from, to),
     totalBudget,
     budgetedSpent,
+    income: cashBetween(workspaceId, from, to).income,
     overallPercentSpent,
     timeElapsedPercent,
     daysUntilPayday,
-    paydayDay,
+    paydayDay: startDay,
     todayLabel,
     monthLabel,
     pacePhrase: phrase,

@@ -110,7 +110,8 @@ function lockGate(request: NextRequest): NextResponse | null {
   if (touchSession(request.cookies.get(SESSION_COOKIE)?.value)) return null;
   if (path.startsWith("/api/")) return NextResponse.json({ error: "locked" }, { status: 401 });
   const url = new URL("/lock", request.url);
-  if (path !== "/") url.searchParams.set("next", path);
+  // Keep the query too (month, filters), so unlocking returns to the same view.
+  if (path !== "/") url.searchParams.set("next", path + request.nextUrl.search);
   return NextResponse.redirect(url);
 }
 

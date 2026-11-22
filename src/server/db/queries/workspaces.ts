@@ -1,4 +1,6 @@
 import "server-only";
+
+import { ApiError } from "@/server/lib/api-error";
 import { applyCategoryHierarchy } from "../category-hierarchy";
 import { applyFamilyColors } from "../category-colors";
 
@@ -166,8 +168,8 @@ function setAvatar(id: number, avatar: AvatarInput): void {
 
 export function createWorkspace(name: string, avatar: AvatarInput = {}): Workspace {
   const trimmed = name.trim();
-  if (!trimmed) throw new Error("Workspace name is required");
-  if (trimmed.length > 60) throw new Error("Workspace name too long");
+  if (!trimmed) throw new ApiError("Workspace name is required", 400);
+  if (trimmed.length > 60) throw new ApiError("Workspace name too long", 400);
 
   const db = getDb();
   const slug = uniqueSlug(slugify(trimmed));
@@ -194,18 +196,18 @@ export function createWorkspace(name: string, avatar: AvatarInput = {}): Workspa
 
   const id = create();
   const row = getWorkspace(id);
-  if (!row) throw new Error("Workspace creation failed");
+  if (!row) throw new ApiError("Workspace creation failed", 500);
   return row;
 }
 
 export function updateWorkspace(id: number, name: string, avatar: AvatarInput = {}): Workspace {
   const trimmed = name.trim();
-  if (!trimmed) throw new Error("Workspace name is required");
-  if (trimmed.length > 60) throw new Error("Workspace name too long");
+  if (!trimmed) throw new ApiError("Workspace name is required", 400);
+  if (trimmed.length > 60) throw new ApiError("Workspace name too long", 400);
 
   const db = getDb();
   const existing = getWorkspace(id);
-  if (!existing) throw new Error("Workspace not found");
+  if (!existing) throw new ApiError("Workspace not found", 404);
 
   let slug = existing.slug;
   if (trimmed.toLowerCase() !== existing.name.toLowerCase()) {
@@ -218,13 +220,13 @@ export function updateWorkspace(id: number, name: string, avatar: AvatarInput = 
   setAvatar(id, avatar);
 
   const updated = getWorkspace(id);
-  if (!updated) throw new Error("Workspace update failed");
+  if (!updated) throw new ApiError("Workspace update failed", 500);
   return updated;
 }
 
 export function deleteWorkspace(id: number): void {
   if (countWorkspaces() <= 1) {
-    throw new Error("Cannot delete the only workspace");
+    throw new ApiError("Cannot delete the only workspace", 409, "last-workspace");
   }
   getDb().prepare("DELETE FROM workspaces WHERE id = ?").run(id);
 }

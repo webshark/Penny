@@ -108,32 +108,35 @@
   --font-serif: var(--font-sans);
   /* Inspired by ESH bank: soft lavender ground, white cards, deep indigo action colour.
      Text colours use Apple's accessible variants where the stock hue misses 4.5:1. */
-  --background: #f4f3fb;
-  --foreground: #14122b;
+  /* Fallbacks while the appearance provider boots, and for pages outside it: the same neutral
+     graphite canvas and single violet accent the studio palette uses. */
+  --background: #f6f5f8;
+  --foreground: #17151f;
   --card: #ffffff;
-  --card-foreground: #14122b;
+  --card-foreground: #17151f;
   --popover: #ffffff;
-  --popover-foreground: #14122b;
-  --primary: #2f22b0;
+  --popover-foreground: #17151f;
+  --primary: #6a4bb5;
   --primary-foreground: #ffffff;
-  --secondary: #eeecfb;
-  --secondary-foreground: #14122b;
-  --muted: #eeecfb;
-  --muted-foreground: #454160;
-  --accent: #eeecfb;
-  --accent-foreground: #14122b;
-  --action: #3d2fd3;
+  --secondary: #efedf3;
+  --secondary-foreground: #17151f;
+  --muted: #efedf3;
+  --muted-foreground: #5f5c70;
+  --accent: #efedf3;
+  --accent-foreground: #17151f;
+  --action: #5c3fa8;
   --gold: #000000;
-  --destructive: #d70015;
+  --destructive: #b42e41;
   --destructive-foreground: #ffffff;
-  --border: #e4e1f4;
-  --input: #7f7aa3;
-  --ring: #2f22b0;
-  --chart-1: #4b3be0;
-  --chart-2: #0a7ea4;
-  --chart-3: #34c759;
-  --chart-4: #c2397f;
-  --chart-5: #ff9500;
+  --border: #e5e3ec;
+  --input: #827e93;
+  --ring: #6a4bb5;
+  --chart-1: #6a4bb5;
+  --chart-2: #2c6e8f;
+  --chart-3: #2f7d5c;
+  --chart-4: #b03a6a;
+  --chart-5: #a8651a;
+  --card-elevation: 0 1px 2px rgb(23 21 31 / 4%), 0 14px 34px -20px rgb(40 30 80 / 20%);
   /* 50/30/20 buckets: one color each, >=4.5:1 on the card, paired with a pattern. */
   --bucket-need: #4b3be0;
   --bucket-want: #b45309;
@@ -150,19 +153,19 @@
   --status-on-track: #105a24;
   --status-heads-up: #9a2800;
   --status-over: #a8000f;
-  --status-plenty-left: #2f22b0;
+  --status-plenty-left: #5a41a8;
   --radius: 0.875rem;
   /* iOS segmented control: tertiary fill track, white thumb. */
   --segmented: #76728f1f;
   --segmented-thumb: #ffffff;
-  --sidebar: #f4f3fb;
-  --sidebar-foreground: #14122b;
-  --sidebar-primary: #2f22b0;
+  --sidebar: #f6f5f8;
+  --sidebar-foreground: #17151f;
+  --sidebar-primary: #6a4bb5;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8e5fa;
-  --sidebar-accent-foreground: #14122b;
+  --sidebar-accent: #edeafb;
+  --sidebar-accent-foreground: #17151f;
   --sidebar-border: transparent;
-  --sidebar-ring: #3d2fd3;
+  --sidebar-ring: #5c3fa8;
 }
 
 .dark {
@@ -170,32 +173,33 @@
   --tint-ollama-bg: #26381c; --tint-ollama-mid: #7fae63; --tint-ollama-ink: #cfe8be;
   --tint-none-bg: #35302a; --tint-none-mid: #a89978; --tint-none-ink: #e0d7c4;
   --tint-warn-ink: #f0a982; --tint-warn-dot: #d98b6c;
-  --background: #0b0a1a;
-  --foreground: #f4f3fb;
-  --card: #16142b;
-  --card-foreground: #f4f3fb;
-  --popover: #1d1a36;
-  --popover-foreground: #f4f3fb;
-  --primary: #aaa2ff;
-  --primary-foreground: #0b0a1a;
-  --secondary: #221f3d;
-  --secondary-foreground: #f4f3fb;
-  --muted: #221f3d;
-  --muted-foreground: #bdb9d6;
-  --accent: #221f3d;
-  --accent-foreground: #f4f3fb;
-  --action: #8b80ff;
+  --background: #0c0b0f;
+  --foreground: #f3f1f6;
+  --card: #17161d;
+  --card-foreground: #f3f1f6;
+  --popover: #1c1b23;
+  --popover-foreground: #f3f1f6;
+  --primary: #b9a6ff;
+  --primary-foreground: #15121e;
+  --secondary: #24232c;
+  --secondary-foreground: #f3f1f6;
+  --muted: #24232c;
+  --muted-foreground: #a8a4b8;
+  --accent: #26242f;
+  --accent-foreground: #f3f1f6;
+  --action: #b9a6ff;
   --gold: #ffffff;
-  --destructive: #ff453a;
-  --destructive-foreground: #161421; /* light red fill in dark: white text would fail contrast */
-  --border: #2c2850;
-  --input: #6e68a3;
-  --ring: #aaa2ff;
-  --chart-1: #8b80ff;
-  --chart-2: #4fc3e8;
-  --chart-3: #30d158;
-  --chart-4: #f07ab4;
-  --chart-5: #ff9f0a;
+  --destructive: #ff9aa8;
+  --destructive-foreground: #15121e; /* light red fill in dark: white text would fail contrast */
+  --border: #2a2834;
+  --input: #7d7a8d;
+  --ring: #b9a6ff;
+  --chart-1: #b9a6ff;
+  --chart-2: #6fb3d1;
+  --chart-3: #6fca9a;
+  --chart-4: #ea8fb8;
+  --chart-5: #e2a25c;
+  --card-elevation: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 14px 30px -22px rgb(0 0 0 / 80%);
   --bucket-need: #a99bff;
   --bucket-want: #ffb340;
   --bucket-saving: #30d158;
@@ -208,27 +212,27 @@
   --status-plenty-left: #aaa2ff;
   --segmented: #7676803d;
   --segmented-thumb: #3a3563;
-  --sidebar: #0b0a1a;
-  --sidebar-foreground: #f4f3fb;
-  --sidebar-primary: #aaa2ff;
-  --sidebar-primary-foreground: #0b0a1a;
-  --sidebar-accent: #16142b;
-  --sidebar-accent-foreground: #f4f3fb;
+  --sidebar: #0c0b0f;
+  --sidebar-foreground: #f3f1f6;
+  --sidebar-primary: #b9a6ff;
+  --sidebar-primary-foreground: #15121e;
+  --sidebar-accent: #17161d;
+  --sidebar-accent-foreground: #f3f1f6;
   --sidebar-border: transparent;
-  --sidebar-ring: #8b80ff;
+  --sidebar-ring: #b9a6ff;
 }
 
 /* The Wallet card: one dark surface per page for its headline figure. Redefines the tokens inside,
    so everything in it (text, meters, status colours) switches to the dark set. */
 .wallet {
-  --card: #2a1fb8;
+  --card: #221f2e;
   --card-foreground: #ffffff;
   --foreground: #ffffff;
-  --muted: rgb(255 255 255 / 18%);
-  --muted-foreground: #d9d4ff;
-  --border: rgb(255 255 255 / 22%);
+  --muted: rgb(255 255 255 / 14%);
+  --muted-foreground: #cbc5de;
+  --border: rgb(255 255 255 / 16%);
   --primary: #ffffff;
-  --primary-foreground: #2a1fb8;
+  --primary-foreground: #221f2e;
   --chart-1: #ffffff;
   --chart-2: #0a7ea4;
   --status-on-track: #7ee2a8;
@@ -238,24 +242,53 @@
   isolation: isolate;
   overflow: hidden;
   /* Text sits only on the deep stops (light text ≥ 5:1); the bright violet is a blurred glow behind. */
-  background: linear-gradient(135deg, #2a1fb8 0%, #3b2bd6 55%, #4a33e6 100%);
+  background:
+    radial-gradient(120% 140% at 100% 0%, #6f55c9 0%, transparent 58%),
+    radial-gradient(90% 120% at 0% 100%, #432f7a 0%, transparent 62%),
+    linear-gradient(160deg, #1c1926 0%, #241f31 48%, #2b2539 100%);
   color: var(--foreground);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 10%) inset,
+    0 24px 60px -34px rgb(14 11 30 / 85%),
+    0 2px 6px rgb(20 18 43 / 16%);
 }
-/* "Silk": soft plum, magenta and periwinkle light pooled in the corners (ESH uses smoke; this is woven, not drifting). */
+/* Aurora: three slow pools of light drifting behind the figure, so the card breathes instead of sitting flat. */
 .wallet::before {
   content: "";
   position: absolute;
-  inset: -30%;
+  inset: -35%;
   background:
-    radial-gradient(45% 60% at 90% 0%, #8d6bff 0%, transparent 70%),
-    radial-gradient(40% 55% at 0% 100%, #a24fe0 0%, transparent 70%);
-  opacity: 0.45;
-  filter: blur(40px);
+    radial-gradient(38% 44% at 28% 18%, #a07bff 0%, transparent 68%),
+    radial-gradient(34% 40% at 78% 72%, #ff77c8 0%, transparent 66%),
+    radial-gradient(30% 36% at 62% 8%, #5fd4ff 0%, transparent 70%);
+  opacity: 0.55;
+  filter: blur(42px);
   z-index: -2;
   pointer-events: none;
+  animation: auroraDrift 26s ease-in-out infinite alternate;
+}
+/* A whisper of film grain: kills the plastic look of a pure CSS gradient. */
+.wallet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.3;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+@keyframes auroraDrift {
+  0% { transform: translate3d(-2%, -1%, 0) scale(1); }
+  50% { transform: translate3d(2%, 2%, 0) scale(1.06); }
+  100% { transform: translate3d(-1%, 3%, 0) scale(1.02); }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .wallet::before { display: none; }
+  .wallet::before, .wallet::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wallet::before { animation: none; }
 }
 
 /* Tesla-style figures: big, thin, tight. */
@@ -292,6 +325,17 @@ html[lang="he"] {
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "ss01", "cv11";
+    /* Two pools of colour behind the whole app: depth without a picture. */
+    background-image:
+      radial-gradient(60rem 40rem at 0% 0%, color-mix(in oklab, var(--primary) 9%, transparent), transparent 70%),
+      radial-gradient(50rem 36rem at 100% 100%, color-mix(in oklab, var(--chart-4) 7%, transparent), transparent 72%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+  html.dark body {
+    background-image:
+      radial-gradient(60rem 40rem at 0% 0%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 70%),
+      radial-gradient(50rem 36rem at 100% 100%, color-mix(in oklab, var(--chart-4) 9%, transparent), transparent 72%);
   }
   html {
     @apply font-sans;
@@ -384,7 +428,8 @@ html[lang="he"] .text-display {
 
 /* Shared page rhythm. */
 #main-content { padding-bottom: env(safe-area-inset-bottom); min-width: 0; }
-#main-content > :is(div, section) { width: 100%; max-width: 76rem; margin-inline: auto; }
+/* Full width; 1920px only stops lines running forever on ultra-wide screens. */
+#main-content > :is(div, section) { width: 100%; max-width: 1920px; margin-inline: auto; }
 
 
 /* ESH-style frosted tile for things laid over the indigo hero (stats, next step). Solid fallback without blur. */
@@ -450,7 +495,13 @@ html[lang="he"] .text-display {
    Header row: title (17/22 semibold) with an optional (i) right after it, optional subtitle (14/20 muted)
    under it; one action (14 medium, primary) on the end. Big number: 22/28 semibold tabular. Body: 14/20. */
 @layer components {
-  .card-surface { border-radius: var(--radius-2xl); border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); background-color: var(--card); color: var(--card-foreground); padding: 1.25rem; }
+  /* A list of label-and-amount rows: two columns on wide screens, so an amount never sits a screen away from its label. */
+  .row-grid { display: grid; column-gap: 2rem; }
+  .row-grid > * + * { border-top: 1px solid var(--border); }
+  @media (min-width: 64rem) { .row-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .row-grid > :nth-child(-n+2) { border-top: 0; } }
+  @media (min-width: 90rem) { .row-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .row-grid > :nth-child(-n+3) { border-top: 0; } }
+  @media (min-width: 120rem) { .row-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .row-grid > :nth-child(-n+4) { border-top: 0; } }
+  .card-surface { border-radius: var(--radius-2xl); border: 1px solid color-mix(in oklab, var(--border) 85%, transparent); background-color: var(--card); color: var(--card-foreground); padding: 1.25rem; box-shadow: var(--card-elevation); }
   @media (min-width: 40rem) { .card-surface { padding: 1.5rem; } }
   .card-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin-bottom: 1rem; }
   .card-title { display: flex; align-items: center; gap: 0.25rem; min-width: 0; font-size: var(--text-headline); line-height: var(--text-headline--line-height); font-weight: 600; color: var(--foreground); text-wrap: balance; }
@@ -458,4 +509,63 @@ html[lang="he"] .text-display {
   .card-action { flex-shrink: 0; max-width: 100%; font-size: var(--text-footnote); font-weight: 500; color: var(--primary); }
   .card-figure { font-size: var(--text-title); line-height: var(--text-title--line-height); font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
   .card-body { font-size: var(--text-footnote); line-height: 1.25rem; }
+}
+
+/* ---- Motion and surface primitives (2026 pass) ------------------------------------ */
+@keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Staggered entrance: set --i on a wrapper to offset it. */
+.rise-in { animation: riseIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.press { transition: transform 0.15s ease-out, background-color 0.15s ease-out, border-color 0.15s ease-out; }
+.press:active { transform: scale(0.97); }
+.lift { transition: transform 0.2s ease-out, box-shadow 0.2s ease-out; }
+.lift:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -18px rgb(20 18 43 / 55%); }
+html.dark .lift:hover { box-shadow: 0 14px 30px -18px rgb(0 0 0 / 70%); }
+@media (prefers-reduced-motion: reduce) {
+  .rise-in { animation: none; }
+  .press:active, .lift:hover { transform: none; }
+}
+
+/* ---- Open and close: one soft curve for the whole app ----------------------------- */
+:root { --ease-soft: cubic-bezier(0.22, 1, 0.36, 1); --dur-open: 300ms; interpolate-size: allow-keywords; }
+/* Every <details> (account groups, lists) opens and closes by height instead of jumping. */
+details::details-content { block-size: 0; overflow: clip; opacity: 0; transition: block-size var(--dur-open) var(--ease-soft), opacity 220ms ease, content-visibility var(--dur-open) allow-discrete; }
+details[open]::details-content { block-size: auto; opacity: 1; }
+/* A region that expands and folds (menu groups, category groups): its row grows from 0 to its height.
+   Pair with `inert` when closed so its links leave the tab order. */
+.reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--dur-open) var(--ease-soft), opacity 220ms ease; }
+.reveal[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
+.reveal > * { min-height: 0; overflow: hidden; } /* keep padding and margins on its child, or they show when closed */
+/* Each page settles in: a short fade and lift, never a slide across. */
+@keyframes pageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.page-in { animation: pageIn 380ms var(--ease-soft) both; }
+@media (prefers-reduced-motion: reduce) {
+  details::details-content, .reveal { transition: none; }
+  .page-in { animation: none; }
+}
+
+/* The four things people do on Home: four tiles on a phone, four pills from 40rem up. */
+.quick-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: 3.5rem;
+  padding: 0.5rem 0.25rem;
+  border-radius: 1.125rem;
+  text-align: center;
+  line-height: 1.15;
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.55), transparent);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--foreground);
+}
+html.dark .quick-chip { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent); }
+.quick-chip:hover { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); }
+.quick-chip svg { color: var(--primary); }
+@media (min-width: 40rem) {
+  .quick-chip { flex-direction: row; gap: 0.5rem; min-height: 2.75rem; padding: 0 0.875rem; border-radius: 999px; text-align: start; font-size: var(--text-footnote); }
 }

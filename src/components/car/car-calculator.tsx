@@ -122,7 +122,7 @@ export function CarCalculator() {
   function Breakdown({ name, r, max }: { name: string; r: CarCost; max: number }) {
     return (
       <div>
-        <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+        <div className="mb-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-medium">{name}</span>
           <span className="tabular-nums">
             <span className="text-lg font-semibold">{shekels(r.total, locale)}</span>

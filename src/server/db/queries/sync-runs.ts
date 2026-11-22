@@ -60,7 +60,7 @@ export function getCredentialStats(
     .prepare(
       `SELECT completed_at, status FROM sync_runs
        WHERE workspace_id = ? AND credential_id = ? AND status = 'completed'
-       ORDER BY started_at DESC LIMIT 1`
+       ORDER BY started_at DESC, id DESC LIMIT 1`
     )
     .get(workspaceId, credentialId) as
     | { completed_at: string; status: string }
@@ -87,12 +87,12 @@ export function getLastSyncRun(
   const row = provider
     ? db
         .prepare(
-          `SELECT * FROM sync_runs WHERE workspace_id = ? AND provider = ? ORDER BY started_at DESC LIMIT 1`
+          `SELECT * FROM sync_runs WHERE workspace_id = ? AND provider = ? ORDER BY started_at DESC, id DESC LIMIT 1`
         )
         .get(workspaceId, provider)
     : db
         .prepare(
-          `SELECT * FROM sync_runs WHERE workspace_id = ? ORDER BY started_at DESC LIMIT 1`
+          `SELECT * FROM sync_runs WHERE workspace_id = ? ORDER BY started_at DESC, id DESC LIMIT 1`
         )
         .get(workspaceId);
 

@@ -5,6 +5,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
+const { downloadUpdate } = require("./update.cjs");
 
 // The data folder is named after the product.
 app.setName("Penny");
@@ -12,6 +13,8 @@ app.setPath("userData", path.join(app.getPath("appData"), "Penny"));
 
 let server = null;
 let win = null;
+/** A downloaded, checksum-verified installer waiting to run. */
+let pendingUpdate = null;
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => {
@@ -75,7 +78,8 @@ async function start() {
   const dataDir = path.join(app.getPath("userData"), "data");
   fs.mkdirSync(dataDir, { recursive: true });
   // Phone access (Settings > Privacy) listens on the network, on a fixed port so the phone URL stays the same.
-  const lan = fs.existsSync(path.join(dataDir, "lan-access.json"));
+  // Phone access only behind the app lock: a leftover flag without a lock never opens the network.
+  const lan = fs.existsSync(path.join(dataDir, "lan-access.json")) && fs.existsSync(path.join(dataDir, ".app-lock.json"));
   const host = lan ? "0.0.0.0" : "127.0.0.1";
   const port = await freePort(lan ? 41234 : 0, host);
   const browser = findBrowser();
@@ -142,9 +146,54 @@ async function start() {
   await win.loadURL(url);
 }
 
-app.whenReady().then(start);
+const he = () => app.getLocale().startsWith("he");
+
+/** Runs the installer silently after this process exits; with `relaunch` it opens Penny again when done. */
+function runInstaller(relaunch) {
+  if (!pendingUpdate) return;
+  spawn(pendingUpdate.file, ["/S", ...(relaunch ? ["--force-run"] : [])], { detached: true, stdio: "ignore" }).unref();
+  pendingUpdate = null;
+}
+
+/** Windows only: fetch a newer release in the background, then ask to restart (or install on quit). Off with PENNY_UPDATE_CHECK=0. */
+async function checkForUpdate() {
+  if (process.platform !== "win32" || !app.isPackaged || pendingUpdate || process.env.PENNY_UPDATE_CHECK === "0") return;
+  try {
+    const found = await downloadUpdate({
+      repo: process.env.PENNY_UPDATE_REPO || "Sergey-Bar/Penny",
+      current: app.getVersion(),
+      dir: path.join(app.getPath("temp"), "penny-update"),
+      log: (m) => console.error(m),
+    });
+    if (!found || !win) return;
+    pendingUpdate = found;
+    const { response } = await dialog.showMessageBox(win, {
+      type: "info",
+      buttons: he() ? ["הפעלה מחדש עכשיו", "אחר כך"] : ["Restart now", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      message: he() ? `גרסה ${found.version} מוכנה` : `Penny ${found.version} is ready`,
+      detail: he()
+        ? "ההתקנה לוקחת כמה שניות והנתונים שלכם נשארים כמו שהם. אם תבחרו אחר כך, היא תותקן כשתסגרו את האפליקציה."
+        : "It installs in a few seconds and your data stays as it is. Choose Later to install it when you close Penny.",
+    });
+    if (response === 0) {
+      runInstaller(true);
+      app.quit();
+    }
+  } catch (err) {
+    console.error("[update]", err && err.message);
+  }
+}
+
+app.whenReady().then(async () => {
+  await start();
+  setTimeout(() => void checkForUpdate(), 30_000).unref?.();
+  setInterval(() => void checkForUpdate(), 6 * 60 * 60 * 1000).unref?.();
+});
 app.on("before-quit", () => {
   app.isQuitting = true;
   if (server && !server.killed) server.kill();
+  runInstaller(false);
 });
 app.on("window-all-closed", () => app.quit());

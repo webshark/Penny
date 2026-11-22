@@ -5,13 +5,19 @@ import { useGentle } from "@/hooks/use-gentle";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import { CircleDot, Printer, RotateCw } from "lucide-react";
+import { Bar, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { motionReduced } from "@/lib/a11y-prefs";
+import { Printer, RotateCw } from "lucide-react";
 import { getOverview, listIntegrations } from "@/lib/api";
-import { ICON_MAP } from "@/components/dashboard/category-card";
 import { CardShell } from "@/components/home/card-shell";
+import { CategoryIcon } from "@/components/ui/category-icon";
 import { HealthCard } from "@/components/home/health-card";
 import { More } from "@/components/overview/more";
 import { AllocationCard } from "@/components/overview/allocation-card";
+import { MoneyFlowCard } from "@/components/overview/money-flow-card";
+import { NetWorthDriversCard } from "@/components/overview/net-worth-drivers-card";
+import { SpendChangeCard } from "@/components/overview/spend-change-card";
+import { CategoryDonut, CategoryOverTime } from "@/components/overview/category-charts";
 import { PeriodHero } from "@/components/ui/page-hero";
 import { PagerNav } from "@/components/ui/month-nav";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,7 +28,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { translateCategoryName } from "@/lib/i18n-data";
 import { cn } from "@/lib/utils";
 import type { PeriodKind } from "@/lib/period";
-import type { CostType, OverviewPayload, OverviewTotals } from "@/lib/types";
+import type { CostType, OverviewPayload } from "@/lib/types";
 
 const KINDS: PeriodKind[] = ["month", "quarter", "half", "year"];
 const COST_COLORS: Record<CostType, string> = { fixed: "var(--chart-1)", variable: "var(--chart-4)", unplanned: "var(--chart-5)" };
@@ -59,10 +65,20 @@ export function OverviewView() {
   // The period before: its arrow is disabled when it has no data.
   const older = useQuery({ queryKey: ["overview", kind, offset + 1], queryFn: () => getOverview(kind, offset + 1) });
   const olderEmpty = older.data != null && older.data.totals.income === 0 && older.data.totals.expenses === 0;
+  const locale = useLocale();
+  const d = query.data;
+  // The card's foot: income, spending and what stayed, as one comparison rather than three cards.
+  const stats = d
+    ? [
+        { key: "income", label: t("income"), dot: "var(--ring-income)", value: shekels(d.totals.income, locale), hint: <Delta cur={d.totals.income} base={d.previous.income} goodWhenUp label={t("vsPrevShort")} /> },
+        { key: "expenses", label: t("expenses"), dot: "var(--ring-spending)", value: shekels(d.totals.expenses, locale), hint: <Delta cur={d.totals.expenses} base={d.previous.expenses} label={t("vsPrevShort")} /> },
+        { key: "saved", label: t("leftOver"), dot: "var(--ring-savings)", value: shekels(d.totals.net, locale), hint: d.totals.savingsRate != null ? t("ofIncome", { percent: pct(d.totals.savingsRate) }) : t("noIncome") },
+      ]
+    : undefined;
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <PeriodHero totals={query.data?.totals} loading={!query.data && !query.isError} error={query.isError} onRetry={() => query.refetch()}
+      <PeriodHero totals={query.data?.totals} stats={stats} loading={!query.data && !query.isError} error={query.isError} onRetry={() => query.refetch()}
         nav={<PagerNav label={query.data ? <PeriodLabel period={query.data.period} /> : "…"} ariaLabel={t("periodPicker")} prevLabel={t("prev")} nextLabel={t("next")}
           onPrev={() => setOffset((o) => o + 1)} onNext={() => setOffset((o) => Math.max(0, o - 1))} prevDisabled={olderEmpty} nextDisabled={offset === 0} />} />
       {query.data && (
@@ -127,22 +143,24 @@ function Body({ data }: { data: OverviewPayload }) {
 
   return (
     <>
-      {/* Summary first (net is the hero figure, so it is not repeated here), then the trend, then where it went. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 max-sm:[&>:last-child]:col-span-2">
-        <Stat label={t("income")} value={shekels(data.totals.income, locale)} cur={data.totals.income} prev={data.previous.income} ly={data.lastYear.income} goodWhenUp />
-        <Stat label={t("expenses")} value={shekels(data.totals.expenses, locale)} cur={data.totals.expenses} prev={data.previous.expenses} ly={data.lastYear.expenses} />
-        <SavingsStat totals={data.totals} previous={data.previous} lastYear={data.lastYear} />
-      </div>
 
       {empty ? (
         <CardShell><p className="text-footnote text-muted-foreground">{t("empty")}</p></CardShell>
       ) : (
         <>
-          {data.monthly.length > 1 && <FlowChart monthly={data.monthly} />}
+          <MoneyFlowCard data={data} />
+          <SpendChangeCard />
+          <div className="grid gap-4 md:gap-6 xl:grid-cols-2 xl:items-start [&>*:only-child]:col-span-full">
+            {data.monthly.length > 1 && <FlowChart monthly={data.monthly} />}
+            <NetWorthDriversCard data={data} />
+          </div>
           {data.categories.length > 0 && <CategoryList data={data} />}
+          <CategoryOverTime data={data} />
 
-          <AllocationCard income={data.totals.income / months} expenses={avgMonthly} byNeed={{ need: data.byNeed.need / months, want: data.byNeed.want / months, saving: data.byNeed.saving / months }} fixed={data.byCost.fixed / months} uncategorized={data.uncategorized / months} categories={data.categories} />
+          <div className="grid gap-4 md:gap-6 xl:grid-cols-2 xl:items-start [&>*:only-child]:col-span-full">
+            <AllocationCard income={data.totals.income / months} expenses={avgMonthly} byNeed={{ need: data.byNeed.need / months, want: data.byNeed.want / months, saving: data.byNeed.saving / months }} fixed={data.byCost.fixed / months} uncategorized={data.uncategorized / months} categories={data.categories} />
           <HealthCard details={false} />
+          </div>
           {!simple && (
             <More id="period">
               <SplitCard
@@ -178,56 +196,10 @@ function Delta({ cur, base, goodWhenUp, label }: { cur: number; base: number; go
   );
 }
 
-function Stat({
-  label, value, cur, prev, ly, goodWhenUp, tone,
-}: { label: string; value: string; cur: number; prev: number; ly: number; goodWhenUp?: boolean; tone?: "bad" }) {
-  const t = useTranslations("overview");
-  const gentle = useGentle();
-  return (
-    <CardShell label={label}>
-      <p className={cn("figure text-[clamp(1.5rem,7vw,2rem)] leading-tight", tone === "bad" && !gentle && "text-status-over")}>{value}</p>
-      <div className="mt-2 space-y-0.5">
-        <Delta cur={cur} base={prev} goodWhenUp={goodWhenUp} label={t("vsPrevShort")} />
-        <Delta cur={cur} base={ly} goodWhenUp={goodWhenUp} label={t("vsLyShort")} />
-      </div>
-    </CardShell>
-  );
-}
-
-function SavingsStat({ totals, previous, lastYear }: { totals: OverviewTotals; previous: OverviewTotals; lastYear: OverviewTotals }) {
-  const t = useTranslations("overview");
-  const gentle = useGentle();
-  const rate = totals.savingsRate;
-  const points = (base: number | null, label: string) =>
-    !gentle && rate != null && base != null ? (
-      <span className="flex items-baseline gap-1.5 text-caption">
-        <span className={cn("whitespace-nowrap font-semibold tabular-nums", rate >= base ? "text-status-on-track" : "text-status-over")}>
-          <bdi>{rate >= base ? "+" : "−"}{Math.round(Math.abs(rate - base) * 100)}</bdi> {t("points")}
-        </span>
-        <span className="text-muted-foreground">{label}</span>
-      </span>
-    ) : null;
-  return (
-    <CardShell label={t("savingsRate")}>
-      <p className={cn("figure text-[clamp(1.5rem,7vw,2rem)] leading-tight", !gentle && rate != null && rate < 0 && "text-status-over")} dir="ltr">
-        {rate == null ? "—" : pct(rate)}
-      </p>
-      {rate == null ? (
-        <p className="mt-2 text-caption text-muted-foreground">{t("noIncome")}</p>
-      ) : (
-        <div className="mt-2 space-y-0.5">
-          {points(previous.savingsRate, t("vsPrevShort"))}
-          {points(lastYear.savingsRate, t("vsLyShort"))}
-        </div>
-      )}
-    </CardShell>
-  );
-}
-
 function FlowChart({ monthly }: { monthly: OverviewPayload["monthly"] }) {
   const t = useTranslations("overview");
   const locale = useLocale();
-  const max = Math.max(1, ...monthly.flatMap((m) => [m.income, m.expenses]));
+  const rtl = locale === "he";
   const monthLabel = (key: string) =>
     new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date(`${key}-15T12:00:00`));
 
@@ -238,31 +210,30 @@ function FlowChart({ monthly }: { monthly: OverviewPayload["monthly"] }) {
         <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-caption text-muted-foreground">
           <Legend color="var(--flow-income)" label={t("income")} />
           <Legend color="var(--flow-expense)" label={t("expenses")} />
-          <span><span className="font-semibold text-[var(--flow-income)]" aria-hidden>+</span> {t("netUp")}</span>
-          <span><span className="font-semibold text-status-over" aria-hidden>−</span> {t("netDown")}</span>
+          <Legend color="var(--primary)" label={t("netTrend")} />
         </span>
       }
     >
-      {/* Time runs right to left in Hebrew, like the rest of the page. */}
-      <ul className="flex h-44 items-end gap-2 sm:gap-3" aria-label={t("cashFlowChart")}>
+      {/* Cash-flow chart: income above the line, spending below, and the net as a trend line.
+          Time runs right to left in Hebrew, like the rest of the page. */}
+      <ul className="sr-only" aria-label={t("cashFlowChart")}>
         {monthly.map((m) => (
-          <li key={m.month} className="flex h-full min-w-0 flex-1 flex-col items-center gap-1.5">
-            <span className="sr-only">
-              {monthLabel(m.month)}: {t("income")} {shekels(m.income, locale)}, {t("expenses")} {shekels(m.expenses, locale)}, {t(m.income - m.expenses >= 0 ? "netUp" : "netDown")} {shekels(Math.abs(m.income - m.expenses), locale)}
-            </span>
-            <div className="flex w-full flex-1 items-end justify-center gap-0.5 sm:gap-1" aria-hidden>
-              <span className="w-full max-w-4 rounded-t-sm bg-[var(--flow-income)]" style={{ height: `${(m.income / max) * 100}%` }} />
-              <span className="w-full max-w-4 rounded-t-sm bg-[var(--flow-expense)]" style={{ height: `${(m.expenses / max) * 100}%` }} />
-            </div>
-            {(m.income > 0 || m.expenses > 0) && (
-              <span className={`text-caption font-semibold leading-none ${m.income >= m.expenses ? "text-[var(--flow-income)]" : "text-status-over"}`} aria-hidden>
-                {m.income >= m.expenses ? "+" : "−"}
-              </span>
-            )}
-            <span className="truncate text-caption text-muted-foreground" aria-hidden>{monthLabel(m.month)}</span>
-          </li>
+          <li key={m.month}>{monthLabel(m.month)}: {t("income")} {shekels(m.income, locale)}, {t("expenses")} {shekels(m.expenses, locale)}, {t(m.income - m.expenses >= 0 ? "netUp" : "netDown")} {shekels(Math.abs(m.income - m.expenses), locale)}</li>
         ))}
       </ul>
+      <div className="h-56" dir="ltr" aria-hidden>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={monthly.map((m) => ({ label: monthLabel(m.month), income: m.income, expenses: -m.expenses, net: m.income - m.expenses }))} stackOffset="sign" margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <XAxis dataKey="label" reversed={rtl} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+            <YAxis orientation={rtl ? "right" : "left"} tickFormatter={(v: number) => `${Math.round(v / 1000)}K`} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={40} />
+            <ReferenceLine y={0} stroke="var(--border)" />
+            <Tooltip formatter={(v, name) => [shekels(Math.abs(Number(v)), locale), name]} contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 10, color: "var(--foreground)" }} cursor={{ fill: "var(--accent)" }} />
+            <Bar dataKey="income" name={t("income")} stackId="f" fill="var(--flow-income)" radius={[3, 3, 0, 0]} maxBarSize={40} isAnimationActive={!motionReduced()} />
+            <Bar dataKey="expenses" name={t("expenses")} stackId="f" fill="var(--flow-expense)" radius={[3, 3, 0, 0]} maxBarSize={40} isAnimationActive={!motionReduced()} />
+            <Line dataKey="net" name={t("netTrend")} type="monotone" stroke="var(--primary)" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={!motionReduced()} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
     </CardShell>
   );
 }
@@ -293,9 +264,9 @@ function SplitCard({
           p.value > 0 ? <span key={p.key} style={{ width: `${(p.value / Math.max(total, 1)) * 100}%`, backgroundColor: p.color }} /> : null
         )}
       </div>
-      <ul className="mt-4 space-y-2">
+      <ul className="row-grid mt-4">
         {parts.map((p) => (
-          <li key={p.key} className="flex items-baseline justify-between gap-3 text-footnote">
+          <li key={p.key} className="flex items-baseline justify-between gap-3 py-2 text-footnote">
             <Legend color={p.color} label={p.label} />
             <span className="tabular-nums">
               <span className="font-semibold">{total ? pct(p.value / total) : "—"}</span>
@@ -319,18 +290,14 @@ function CategoryList({ data }: { data: OverviewPayload }) {
 
   return (
     <CardShell label={t("categoriesTitle")}>
-      <ul className="divide-y divide-border">
+      {/* Breakdown: the donut beside the list. */}
+      <div className="grid items-center gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <CategoryDonut data={data} />
+      <ul className="row-grid">
         {data.categories.map((c) => {
-          const Icon = ICON_MAP[c.icon ?? "circle-dot"] ?? CircleDot;
           return (
-            <li key={c.categoryId} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 py-3">
-              <span
-                className="grid size-9 place-items-center rounded-xl"
-                style={{ backgroundColor: `color-mix(in oklab, ${c.color} 22%, transparent)` }}
-                aria-hidden
-              >
-                <Icon className="size-[18px] text-foreground" />
-              </span>
+            <li key={c.categoryId} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 py-3.5">
+              <CategoryIcon icon={c.icon} color={c.color} />
               <div className="min-w-0">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-footnote font-medium">{translateCategoryName(c.name, tCat)}</span>
@@ -350,6 +317,7 @@ function CategoryList({ data }: { data: OverviewPayload }) {
           );
         })}
       </ul>
+      </div>
     </CardShell>
   );
 }

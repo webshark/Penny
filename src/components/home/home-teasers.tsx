@@ -4,6 +4,7 @@ import { Forward } from "@/components/ui/dir-chevron";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { X } from "lucide-react";
 import { getOwners } from "@/lib/api";
 import { useHousehold } from "@/hooks/use-household";
@@ -18,12 +19,27 @@ const ils = (n: number) => new Intl.NumberFormat("he-IL", { style: "currency", c
 const card =
   "flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card px-5 py-4 transition-colors duration-150 hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
-/** Calm "let's get to know you" invite on first run; never blocks Home. Reopen any time from More or Help. */
-export function WelcomePrompt() {
+/**
+ * Calm "let's get to know you" invite on first run; never blocks Home. Reopen any time from More or Help.
+ * `pip` is the small bubble that lives with the pet on Home, instead of a card dropped into the page.
+ */
+export function WelcomePrompt({ variant = "card" }: { variant?: "card" | "pip" }) {
   const t = useTranslations("welcome");
+  const tc = useTranslations("common");
   const { household, loading, save } = useHousehold();
   const { plan, loaded, update } = usePlan();
   if (loading || !loaded || plan.profile.onboarded || !shouldShowWelcome(household)) return null;
+  const dismiss = () => { save({ welcomeDismissed: true }); void update({ profile: { ...plan.profile, onboarded: true } }).catch(() => toast.error(tc("saveFailed"))); };
+  if (variant === "pip") {
+    return (
+      <Link
+        href="/welcome"
+        className="mt-1 block max-w-28 rounded-2xl rounded-bl-sm border border-border/60 bg-card/95 px-2 py-1 text-center shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        <span className="line-clamp-2 block text-[11px] font-medium leading-tight">{t("prompt")}</span>
+      </Link>
+    );
+  }
   return (
     <div className="mb-4 flex items-center gap-2 rounded-2xl border border-border/60 bg-card p-2 md:mb-5">
       <Link href="/welcome" className="min-w-0 flex-1 rounded-xl px-3 py-2 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
@@ -33,7 +49,7 @@ export function WelcomePrompt() {
       <button
         type="button"
         aria-label={t("dismiss")}
-        onClick={() => { save({ welcomeDismissed: true }); void update({ profile: { ...plan.profile, onboarded: true } }).catch(() => {}); }}
+        onClick={dismiss}
         className="grid size-11 place-items-center rounded-full text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
       >
         <X className="size-4" aria-hidden />

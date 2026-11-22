@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getBudgetMoves, setBudgetMoves } from "@/server/db/queries/budgets";
 import { getWorkspaceIdFromRequest } from "@/server/lib/workspace-context";
 import { isMove } from "@/lib/budget-moves";
+import { roundCents } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ws = getWorkspaceIdFromRequest(request);
   const body = (await request.json().catch(() => null)) as { month?: string; from?: number; to?: number; amount?: number } | null;
-  const move = { from: body?.from, to: body?.to, amount: Math.round((body?.amount ?? 0) * 100) / 100 };
+  const move = { from: body?.from, to: body?.to, amount: roundCents(body?.amount ?? 0) };
   if (!body || !MONTH.test(body.month ?? "") || !isMove(move)) return NextResponse.json({ error: "invalid move" }, { status: 400 });
   const all = getBudgetMoves(ws);
   all[body.month!] = [...(all[body.month!] ?? []), move];
@@ -34,7 +35,9 @@ export async function DELETE(request: Request) {
   if (!MONTH.test(month)) return NextResponse.json({ error: "month is required" }, { status: 400 });
   const all = getBudgetMoves(ws);
   const current = all[month] ?? [];
-  const index = params.has("index") ? Number(params.get("index")) : current.length - 1;
+  const rawIndex = params.get("index");
+  const index = rawIndex == null ? current.length - 1 : Number(rawIndex);
+  if (!Number.isInteger(index)) return NextResponse.json({ error: "invalid index" }, { status: 400 });
   const list = current.filter((_, i) => i !== index);
   if (list.length) all[month] = list;
   else delete all[month];

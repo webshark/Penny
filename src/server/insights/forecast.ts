@@ -22,6 +22,11 @@ interface ForecastOptions {
   avgDiscretionary: number;
   /** Charges already made that will land on an upcoming bill, by billing date (net of refunds). When given, the first bill's remaining spend is scaled to the days left. */
   posted?: Record<string, number>;
+  /**
+   * Typical days from a charge to the bill it lands on (the card's statement closes before its billing day).
+   * A subscription charged on the 5th with billing on the 10th usually lands on next month's bill, not this one.
+   */
+  lagDays?: number;
 }
 
 /** Dates (strictly after `after`, up to `until`) on which a series is expected to charge. */
@@ -67,7 +72,12 @@ export function forecastBill(opts: ForecastOptions): BillForecast[] {
 
   return dates.map((date, i) => {
     const prev = i === 0 ? opts.today : dates[i - 1];
-    const recurring = active.reduce((sum, s) => sum + occurrences(s, prev, date) * s.expectedAmount, 0);
+    // A future charge on day d lands on the first bill on or after d + lag; charges up to today are already posted.
+    const recurring = active.reduce((sum, s) => {
+      const lag = s.billingLagDays ?? opts.lagDays ?? 0;
+      const after = addDays(prev, -lag) > opts.today ? addDays(prev, -lag) : opts.today;
+      return sum + occurrences(s, after, addDays(date, -lag)) * s.expectedAmount;
+    }, 0);
     const installments = opts.installments
       .filter((p) => p.date > prev && p.date <= date)
       .reduce((sum, p) => sum + p.amount, 0);
@@ -93,6 +103,8 @@ export interface CardForecastInput {
   /** Charges already made on this card, by the billing date they land on. */
   posted: Record<string, number>;
   avgDiscretionary: number;
+  /** See ForecastOptions.lagDays. */
+  lagDays?: number;
 }
 
 /** Next 3 bills of every card, each on its own billing day, with only that card's subscriptions and installments. */
@@ -111,6 +123,7 @@ export function forecastCards(opts: {
         installments: opts.installments.filter((p) => p.account === card.account),
         avgDiscretionary: card.avgDiscretionary,
         posted: card.posted,
+        lagDays: card.lagDays,
       }).map((f) => ({ ...f, account: card.account }))
     )
     .sort((a, b) => a.date.localeCompare(b.date));

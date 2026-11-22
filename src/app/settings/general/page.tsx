@@ -1,6 +1,7 @@
 "use client";
 
 import { shekels } from "@/lib/money";
+import { SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -17,7 +18,9 @@ import { Switch } from "@/components/ui/switch";
 import { SectionShell, SettingCard, SettingList, SettingRow } from "@/components/settings/section-shell";
 import { StarBanner } from "@/components/settings/star-banner";
 import { DataState } from "@/components/ui/data-state";
-import { getSettings, getSummary, updateSettings } from "@/lib/api";
+import { getOwners, getSettings, getSummary, updateSettings } from "@/lib/api";
+import { loadPreference, storePreference } from "@/lib/preference-sync";
+import { translateProviderName } from "@/lib/i18n-data";
 import type { AppSettings } from "@/lib/types";
 import type { Locale } from "@/i18n/routing";
 
@@ -68,7 +71,7 @@ export default function GeneralSettingsPage() {
   });
 
   return (
-    <SectionShell title={t("title")} description={t("description")}>
+    <SectionShell title={t("title")} description={t("description")} icon={<SlidersHorizontal aria-hidden />}>
       {settings ? (
         <>
           <MonthlyTargetCard
@@ -77,6 +80,7 @@ export default function GeneralSettingsPage() {
             typicalMonthly={summary?.typicalMonthly ?? null}
           />
           <SyncCard key={`time:${settings.autoSyncTime}`} settings={settings} />
+          <TransactionDefaultsCard />
         </>
       ) : isError ? (
         <DataState error onRetry={() => void refetch()} />
@@ -210,5 +214,32 @@ function SyncCard({ settings }: { settings: AppSettings }) {
         </SettingList>
       </SettingCard>
     </>
+  );
+}
+
+/** Default account: where a new manual transaction starts. */
+function TransactionDefaultsCard() {
+  const t = useTranslations("settings.general");
+  const tBanks = useTranslations("banks");
+  const qc = useQueryClient();
+  const pref = useQuery({ queryKey: ["preference", "transaction-defaults"], queryFn: () => loadPreference("transaction-defaults") });
+  const accounts = useQuery({ queryKey: ["owners", "accounts"], queryFn: () => getOwners(todayLocalISO(), todayLocalISO()) }).data?.accounts ?? [];
+  const current = (pref.data as { account?: unknown } | null)?.account;
+  const value = typeof current === "string" ? current : "cash";
+  function save(account: string) {
+    const next = { account };
+    qc.setQueryData(["preference", "transaction-defaults"], next);
+    void storePreference("transaction-defaults", next).then(() => toast.success(t("defaultAccountSaved")), () => toast.error(t("defaultAccountFailed")));
+  }
+  return (
+    <SettingCard title={t("defaultsTitle")} description={t("defaultsDescription")}>
+      <SettingRow label={t("defaultAccount")} labelId="default-account-label" hint={t("defaultAccountHint")}>
+        <select aria-labelledby="default-account-label" value={value} onChange={(e) => save(e.target.value)} disabled={!pref.isFetched}
+          className="h-10 min-w-48 rounded-lg border border-border bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring">
+          <option value="cash">{t("defaultAccountCash")}</option>
+          {accounts.map((a) => <option key={a.accountNumber} value={a.accountNumber}>{`${a.label ?? translateProviderName(a.provider, a.provider, tBanks)} · ${a.accountNumber.slice(-4)}`}</option>)}
+        </select>
+      </SettingRow>
+    </SettingCard>
   );
 }

@@ -24,7 +24,9 @@ export function Segmented<T extends string | number>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={cn("inline-flex flex-wrap gap-1", variant === "track" && "flex-nowrap gap-0 rounded-full bg-[var(--segmented)] p-0.5", className)}
+      // The track wraps on phones: three long English labels cannot share a 320px row,
+      // and keeping them on one line pushed the whole settings page sideways.
+      className={cn("inline-flex flex-wrap gap-1", variant === "track" && "max-w-full gap-x-0 gap-y-0.5 rounded-2xl bg-[var(--segmented)] p-0.5 sm:flex-nowrap sm:rounded-full", className)}
       onKeyDown={(e) => {
         const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
         if (!step) return;

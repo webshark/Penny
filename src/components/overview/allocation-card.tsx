@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { CardShell } from "@/components/home/card-shell";
 import { Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -50,7 +51,7 @@ export function AllocationCard({
   // The household plan's emergency-fund target (shared by every profile, same value Home and FI use).
   const { plan, update } = usePlan();
   const months = plan.emergencyMonths;
-  const pickMonths = (v: string) => { void update({ emergencyMonths: Number(v) }).catch(() => {}); };
+  const pickMonths = (v: string) => { void update({ emergencyMonths: Number(v) }).catch(() => toast.error(tc("saveFailed"))); };
   if (income <= 0) return null;
   const liquidNow = liquidCash(assets.data?.assets ?? []);
   const a = allocate({ income, expenses, liquidNow, emergencyMonths: months });
@@ -112,18 +113,19 @@ export function AllocationCard({
   return (
     <CardShell label={t("title")} action={more}>
       {/* The bar is the month's income; each bucket takes its share in its own color and pattern. */}
-      <div className="flex h-4 w-full gap-px overflow-hidden rounded-full bg-muted" aria-hidden>
-        {BUCKETS.map((k) => actual(k) > 0 && <span key={k} style={{ width: `${(actual(k) / barTotal) * 100}%`, ...fill(k) }} />)}
-        {uncategorized > 0 && <span style={{ width: `${(uncategorized / barTotal) * 100}%`, ...fill("none") }} />}
+      <div className="flex h-2.5 w-full gap-px overflow-hidden rounded-full bg-muted" aria-hidden>
+        {/* The thin bar stays flat color — at 10px the patterns read as noise; they live in the legend swatches. */}
+        {BUCKETS.map((k) => actual(k) > 0 && <span key={k} style={{ width: `${(actual(k) / barTotal) * 100}%`, background: `var(--bucket-${k})` }} />)}
+        {uncategorized > 0 && <span style={{ width: `${(uncategorized / barTotal) * 100}%`, background: "var(--muted-foreground)" }} />}
       </div>
 
-      <ul className="mt-3 divide-y divide-border">
+      <ul className="mt-2 divide-y divide-border/70">
         {BUCKETS.map((k) => {
           const value = actual(k);
           const off = k === "saving" ? value < a.targets[k] : value > a.targets[k];
           return (
-            <li key={k} className="flex items-baseline justify-between gap-3 py-2.5 text-footnote">
-              <span className="flex items-center gap-2 font-medium"><Swatch k={k} />{t(`b_${k}`)}</span>
+            <li key={k} className="flex items-baseline justify-between gap-3 py-1.5 text-caption">
+              <span className="flex items-center gap-1.5 font-medium"><Swatch k={k} />{t(`b_${k}`)}</span>
               <span className={`text-end font-semibold tabular-nums ${off ? "text-status-heads-up" : ""}`}>
                 {t("ofTarget", { actual: $(value), target: $(a.targets[k]) })}
                 {off && <span className="sr-only"> ({t("offTarget")})</span>}
@@ -132,7 +134,7 @@ export function AllocationCard({
           );
         })}
       </ul>
-      <p className="mt-2 text-footnote text-muted-foreground">{a.surplus > 0 ? t("leftover", { amount: $(a.surplus) }) : t("noSurplusShort")}</p>
+      <p className="mt-1.5 text-caption text-muted-foreground">{a.surplus > 0 ? t("leftover", { amount: $(a.surplus) }) : t("noSurplusShort")}</p>
     </CardShell>
   );
 }

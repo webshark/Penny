@@ -50,7 +50,8 @@ export function PagerNav({ label, ariaLabel, prevLabel, nextLabel, onPrev, onNex
       {arrow("prev", prevDisabled, onPrev, prevLabel)}
       <span className="month-nav-label" aria-live="polite">{label}</span>
       {arrow("next", nextDisabled, onNext, nextLabel)}
-      {onReset && <button type="button" className="month-nav-today" onClick={onReset}><RotateCcw className="size-3.5" aria-hidden />{resetLabel}</button>}
+      {/* Icon only: away from the newest month the chip must not push the label around. */}
+      {onReset && <button type="button" className="month-nav-today" onClick={onReset} aria-label={resetLabel} title={resetLabel}><RotateCcw className="size-4" aria-hidden /></button>}
     </div>
   );
 }
@@ -100,6 +101,14 @@ export function MonthStrip({ value, onChange, max = monthKey(new Date()) }: Prop
   const months: string[] = [];
   for (let m = oldest; m <= max; m = shiftMonth(m, 1)) months.push(m);
   const top = Math.max(1, ...months.map((m) => flow.get(m)?.expenses ?? 0));
+  // Overrun: past the monthly target when one is set, otherwise a month running well above the usual month (a spike).
+  const settled = months.map((m) => flow.get(m)?.expenses ?? 0).filter((v) => v > 0).sort((a, b) => a - b);
+  const baseline = settled.length >= 3 ? settled[Math.floor(settled.length / 2)] : 0;
+  const statusOf = (v: number | undefined): "over" | "ok" | undefined => {
+    if (!v) return undefined;
+    if (budget) return v > budget ? "over" : "ok";
+    return baseline > 0 && v > baseline * 1.25 ? "over" : undefined;
+  };
   const ref = useRef<HTMLDivElement>(null);
 
   // Keep the picked pill in view without scrolling the page (scrollIntoView would).
@@ -130,11 +139,12 @@ export function MonthStrip({ value, onChange, max = monthKey(new Date()) }: Prop
         const name = d.toLocaleDateString(locale, { month: "long", year: "numeric" });
         const on = m === value;
         const off = !on && !has(m);
-        const status = !budget || !v ? undefined : v > budget ? "over" : "ok";
-        const label = [v ? t("monthSpent", { month: name, amount: shekels(v, locale) }) : name, status && t(status === "over" ? "monthOver" : "monthOk"), off && t("noData")].filter(Boolean).join(" · ");
+        const status = statusOf(v);
+        const overText = t(budget ? "monthOver" : "monthSpike");
+        const label = [v ? t("monthSpent", { month: name, amount: shekels(v, locale) }) : name, status && t(status === "over" ? (budget ? "monthOver" : "monthSpike") : "monthOk"), off && t("noData")].filter(Boolean).join(" · ");
         return (
           <button key={m} type="button" role="radio" aria-checked={on} aria-disabled={off || undefined} tabIndex={on ? 0 : -1}
-            onClick={() => { if (!off) onChange(m); }} title={off ? t("noData") : undefined} aria-label={label} className="month-pill" data-status={status}>
+            onClick={() => { if (!off) onChange(m); }} title={off ? t("noData") : status === "over" ? overText : undefined} aria-label={label} className="month-pill" data-status={status}>
             <span className="month-pill-bar" aria-hidden><i style={{ height: `${Math.max(6, ((v ?? 0) / top) * 100)}%` }} /></span>
             <span aria-hidden>{d.toLocaleDateString(locale, { month: "short" })}</span>
           </button>

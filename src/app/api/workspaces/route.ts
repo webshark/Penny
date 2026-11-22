@@ -6,6 +6,8 @@ import {
 import {accessEnabled,currentUser,membership} from "@/server/lib/user-access";
 import { parseAvatar } from "@/lib/profile-avatar";
 
+import { errorResponse } from "@/server/lib/api-error";
+
 export async function GET(request:Request) {
   const user=currentUser(request);
   return NextResponse.json(listWorkspaces().filter(ws=>!accessEnabled()||!!user&&!!membership(user,ws.id)));
@@ -40,9 +42,6 @@ export async function POST(request: Request) {
     const ws = createWorkspace(name, avatar);
     return NextResponse.json(ws, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to create workspace" },
-      { status: 400 }
-    );
+    return errorResponse("workspaces", err);
   }
 }

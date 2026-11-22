@@ -24,7 +24,7 @@ export function SimpleTopBar() {
   const t = useTranslations("nav");
   const tPrivacy = useTranslations("settings.privacy");
   const [privacyOn, togglePrivacy] = usePrivacyMode();
-  const home = useQuery({ queryKey: ["home"], queryFn: getHome });
+  const home = useQuery({ queryKey: ["home"], queryFn: () => getHome() });
   const { data: activity } = useQuery({ queryKey: ["activity"], queryFn: getActivity, refetchInterval: 15000, refetchIntervalInBackground: false });
   const lock = useQuery({ queryKey: ["lock"], queryFn: getLockStatus });
   const onSettings = pathname.startsWith("/settings");

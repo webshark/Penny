@@ -1,23 +1,19 @@
 import "server-only";
 
 import { getDb } from "../index";
+import { cashBetween } from "../../finance/facts";
 import type { PeriodRange } from "@/lib/period";
 import type { CostType, NeedType, OverviewCategoryRow, OverviewTotals } from "@/lib/types";
 
-const BASE = `t.workspace_id = ? AND t.date >= ? AND t.date <= ?
-  AND t.status = 'completed' AND t.is_excluded = 0`;
-
 export function getPeriodTotals(workspaceId: number, r: PeriodRange): OverviewTotals {
-  const row = getDb()
-    .prepare(
-      `SELECT
-         COALESCE(SUM(CASE WHEN t.kind = 'income' THEN t.charged_amount END), 0) as income,
-         COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN -t.charged_amount END), 0) as expenses
-       FROM transactions t WHERE ${BASE}`
-    )
-    .get(workspaceId, r.from, r.to) as { income: number; expenses: number };
-  const net = row.income - row.expenses;
-  return { ...row, net, savingsRate: row.income > 0 ? net / row.income : null };
+  // Same rule as Home and the budget: refunds reduce spending, transfers are neutral.
+  const totals = cashBetween(workspaceId, r.from, r.to);
+  return {
+    income: totals.income,
+    expenses: totals.spend,
+    net: totals.net,
+    savingsRate: totals.income > 0 ? totals.net / totals.income : null,
+  };
 }
 
 /** Groups a date into its budget month when months start on `startDay`. */
@@ -29,9 +25,9 @@ export function getMonthlyFlow(workspaceId: number, r: PeriodRange, startDay = 1
   const rows = getDb()
     .prepare(
       `SELECT ${month} as month,
-         COALESCE(SUM(CASE WHEN t.kind = 'income' THEN t.charged_amount END), 0) as income,
-         COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN -t.charged_amount END), 0) as expenses
-       FROM transactions t WHERE ${BASE} GROUP BY month`
+         COALESCE(SUM(CASE WHEN t.flow_type = 'income' THEN t.cash_amount END), 0) as income,
+         COALESCE(SUM(CASE WHEN t.flow_type <> 'income' THEN -t.cash_amount END), 0) as expenses
+       FROM v_cash_rows t WHERE t.workspace_id = ? AND t.date >= ? AND t.date <= ? GROUP BY month`
     )
     .all(shift, workspaceId, r.from, r.to) as { month: string; income: number; expenses: number }[];
   const byMonth = new Map(rows.map((x) => [x.month, x]));
@@ -42,9 +38,9 @@ export function getMonthlyFlow(workspaceId: number, r: PeriodRange, startDay = 1
 export function getSpendingTypeSplit(workspaceId: number, r: PeriodRange) {
   const rows = getDb()
     .prepare(
-      `SELECT c.need_type as needType, c.cost_type as costType, SUM(-t.charged_amount) as amount
-       FROM category_transactions t LEFT JOIN categories c ON c.id = t.category_id
-       WHERE ${BASE} AND t.kind = 'expense'
+      `SELECT c.need_type as needType, c.cost_type as costType, SUM(t.spend) as amount
+       FROM v_spend_rows t LEFT JOIN categories c ON c.id = t.category_id
+       WHERE t.workspace_id = ? AND t.date >= ? AND t.date <= ?
        GROUP BY c.need_type, c.cost_type`
     )
     .all(workspaceId, r.from, r.to) as { needType: NeedType | null; costType: CostType | null; amount: number }[];
@@ -76,9 +72,9 @@ export function getCategoryRows(
     db
       .prepare(
         `SELECT COALESCE(c.parent_id, c.id) as key${byMonth ? `, ${month} as month, c.need_type as needType` : ""},
-           SUM(-t.charged_amount) as amount
-         FROM category_transactions t JOIN categories c ON c.id = t.category_id
-         WHERE ${BASE} AND t.kind = 'expense'
+           SUM(t.spend) as amount
+         FROM v_spend_rows t JOIN categories c ON c.id = t.category_id
+         WHERE t.workspace_id = ? AND t.date >= ? AND t.date <= ?
          GROUP BY key${byMonth ? ", month, needType" : ""}`
       )
       .all(...(byMonth ? [shift] : []), workspaceId, from, to) as { key: number; month?: string; needType?: NeedType; amount: number }[];

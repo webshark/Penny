@@ -4,7 +4,9 @@ import { assetSnapshots, listAccountBalances, listAssets, netWorthHistory, saveD
 import { BANK_PROVIDERS } from "@/lib/types";
 import { fxRate, getQuotes } from "./quotes";
 import { BENCHMARKS } from "@/lib/markets";
-import { toLocalISODate } from "../lib/date-utils";
+import { israelToday } from "../lib/date-utils";
+import { studyFundIsLiquid } from "@/lib/study-fund";
+import { splitGain } from "@/lib/holding-gain";
 import type { Asset, AssetsPayload, AssetType, Fund, FundSource } from "@/lib/types";
 import { loadFunds } from "./funds";
 import { compareFund } from "@/lib/funds";
@@ -25,6 +27,10 @@ export async function getAssetsPayload(workspaceId: number): Promise<AssetsPaylo
     ...currencies.map((c) => `${c}ILS=X`),
     ...BENCHMARKS,
   ]);
+  // A holding priced in a currency no asset row names (AAPL added as ILS, quoted in USD) needs that rate too,
+  // or its shekel value is null and it drops out of net worth.
+  const missing = [...new Set([...quotes.values()].flatMap((q) => (q && q.currency !== "ILS" && !quotes.has(`${q.currency}ILS=X`) ? [q.currency] : [])))];
+  if (missing.length) for (const [k, v] of await getQuotes(missing.map((c) => `${c}ILS=X`))) quotes.set(k, v);
 
   // Public fund data, only fetched when some asset is linked to a fund.
   const fundLists = new Map<FundSource, Fund[]>();
@@ -51,9 +57,13 @@ export async function getAssetsPayload(workspaceId: number): Promise<AssetsPaylo
     const rate = fxRate(currency, quotes);
     const valueIls = value != null && rate != null ? value * rate : null;
     const costRate = fxRate(r.currency, quotes);
-    const gainIls =
-      valueIls != null && r.costBasis != null && costRate != null ? valueIls - r.costBasis * costRate : null;
-    return { ...r, currency, value, valueIls, gainIls, quote, fund: fundOf(r), estimate: estimateOf(r), change: lastChange(snaps.get(r.id) ?? [], valueIls) };
+    const split = valueIls != null && r.costBasis != null && costRate != null
+      ? splitGain(valueIls, r.costBasis, costRate, r.currency === "ILS" ? null : r.costFx ?? null) : null;
+    const gainIls = split?.total ?? null;
+    const fxGainIls = split?.fx ?? null;
+    // A study fund with an opening month turns liquid by itself six years on.
+    const liquid = r.type === "study_fund" && r.purchaseMonth ? studyFundIsLiquid(r.purchaseMonth, israelToday()) : r.liquid;
+    return { ...r, liquid, currency, value, valueIls, gainIls, fxGainIls, quote, fund: fundOf(r), estimate: estimateOf(r), change: lastChange(snaps.get(r.id) ?? [], valueIls) };
   });
 
   // Synced bank balances, as cash (an overdrawn account counts as a short-term debt).
@@ -63,6 +73,9 @@ export async function getAssetsPayload(workspaceId: number): Promise<AssetsPaylo
     assets.push({
       id: -b.id,
       name: `${bank} · ${b.accountNumber.slice(-4)}`,
+      // The client translates the bank name; the server doesn't know the user's language.
+      provider: b.provider,
+      accountNumber: b.accountNumber,
       type: overdrawn ? "credit" : "cash",
       currency: "ILS",
       symbol: null,
@@ -100,12 +113,12 @@ export async function getAssetsPayload(workspaceId: number): Promise<AssetsPaylo
   }
 
   saveSnapshots(
-    toLocalISODate(new Date()),
+    israelToday(),
     assets.flatMap((a) => (a.valueIls != null && a.id > 0 ? [{ assetId: a.id, valueIls: a.valueIls }] : []))
   );
 
   const netWorth = total - liabilities - deferredTax;
-  saveDailyNetWorth(workspaceId, toLocalISODate(new Date()), netWorth);
+  saveDailyNetWorth(workspaceId, israelToday(), netWorth);
 
   return {
     assets,

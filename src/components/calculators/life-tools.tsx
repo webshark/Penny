@@ -58,9 +58,9 @@ export function LostMoneyChecklist() {
         <ol className="space-y-3">
           {STEPS.map((s, i) => (
             <li key={s} className="flex items-start gap-3">
-              <input type="checkbox" id={`lm-${s}`} className="mt-1 size-4 shrink-0 accent-[var(--foreground)]" checked={!!done[s]} onChange={(e) => setDone({ ...done, [s]: e.target.checked })} />
+              <input type="checkbox" id={`lm-step-${s}`} className="mt-1 size-4 shrink-0 accent-[var(--foreground)]" checked={!!done[s]} onChange={(e) => setDone({ ...done, [s]: e.target.checked })} />
               <div className="min-w-0">
-                <label htmlFor={`lm-${s}`} className={cn("block cursor-pointer font-medium", done[s] && "text-muted-foreground line-through")}>{i + 1}. {t(`step_${s}`)}</label>
+                <label htmlFor={`lm-step-${s}`} className={cn("block cursor-pointer font-medium", done[s] && "text-muted-foreground line-through")}>{i + 1}. {t(`step_${s}`)}</label>
                 <p className="text-footnote text-pretty text-muted-foreground">{t(`step_${s}_why`)}</p>
                 {s === "search" && <OutLink href={LOST_MONEY_LINKS.pension}>{t("linkPension")}</OutLink>}
                 {s === "banks" && <OutLink href={LOST_MONEY_LINKS.bank}>{t("linkBank")}</OutLink>}

@@ -40,6 +40,22 @@ describe("parseQuestion", () => {
   });
 });
 
+describe("month start day", () => {
+  // Months start on the 10th, and 6 Nov is still the October household month.
+  const askShifted = (q: string) => parseQuestion(q, today, cats, descs, 10).period;
+
+  it("moves each named period to the household month", () => {
+    expect(askShifted("כמה הוצאתי בחודש שעבר")).toMatchObject({ from: "2026-09-10", to: "2026-10-09" });
+    expect(askShifted("כמה הוצאתי החודש")).toMatchObject({ from: "2026-10-10", to: "2026-11-06" });
+    expect(askShifted("כמה הוצאתי בספטמבר")).toMatchObject({ from: "2026-09-10", to: "2026-10-09" });
+    expect(askShifted("כמה הוצאתי השנה")).toMatchObject({ from: "2026-01-10", to: "2026-11-06" });
+  });
+
+  it("keeps day and week questions exact", () => {
+    expect(askShifted("כמה הוצאתי היום")).toMatchObject({ from: "2026-11-06", to: "2026-11-06" });
+  });
+});
+
 describe("periodLabel", () => {
   it("names the dates", () => {
     expect(periodLabel({ from: "2026-10-01", to: "2026-10-31" }, "he")).toBe("בין 1 ל-31 באוקטובר");

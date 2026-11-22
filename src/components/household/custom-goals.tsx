@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { getPlan, savePlanItem } from "@/lib/api";
+import { getCashflowHealth, getPlan, savePlanItem } from "@/lib/api";
 import { shekels } from "@/lib/money";
 import { GOAL_COLORS, goalMonthly, goalReachMonth, type GoalColor } from "@/lib/plan";
 import { useUndoableDelete } from "@/hooks/use-undoable-delete";
@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { NumberField, numberError } from "@/components/ui/number-field";
 import type { Goal } from "@/lib/types";
 
-const ICONS = ["🎯", "🏠", "🚗", "🎓", "💍", "👶", "💻", "🛟", "🐶", "🎸"];
+const ICONS = ["🎯", "🏠", "🚗", "✈️", "🎓", "💍", "👶", "💻", "🛟", "🐶", "🎸"];
 const COLOR_VAR: Record<GoalColor, string> = { indigo: "var(--chart-1)", green: "var(--bucket-saving)", amber: "var(--bucket-want)", orange: "var(--chart-5)", red: "var(--status-over)" };
 
 type Draft = { id?: number; name: string; targetAmount: string; targetDate: string; savedAmount: string; monthly: string; icon: string; color: GoalColor };
@@ -34,6 +34,14 @@ export function CustomGoals() {
   const goals = (q.data?.goals ?? []).filter((g) => g.kind !== "vacation");
   const now = new Date();
   const $ = (n: number) => shekels(Math.round(n), locale);
+  // Behind = a dated goal whose set monthly saving is below what the date needs.
+  const isBehind = (g: Goal) => g.dated !== false && g.savedAmount < g.targetAmount && !!g.monthly && goalMonthly(g.targetAmount, g.savedAmount, g.targetDate, now) > g.monthly;
+  const [filter, setFilter] = useState<"all" | "behind">("all");
+  const behindCount = goals.filter(isBehind).length;
+  const shown = filter === "behind" ? goals.filter(isBehind) : goals;
+  const health = useQuery({ queryKey: ["cashflow-health"], queryFn: getCashflowHealth });
+  const saving = health.data?.hasData ? Math.max(0, health.data.avgIncome - health.data.avgExpenses) : null;
+  const needTotal = goals.filter((g) => g.dated !== false && g.savedAmount < g.targetAmount).reduce((sum, g) => sum + goalMonthly(g.targetAmount, g.savedAmount, g.targetDate, now), 0);
   const monthName = (ym: string) => new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(`${ym}-15T12:00:00`));
 
   /** One line: monthly needed by the date, or when the monthly contribution reaches the target. */
@@ -109,14 +117,28 @@ export function CustomGoals() {
       ) : goals.length === 0 ? (
         <p className="text-footnote text-pretty text-muted-foreground">{t("empty")}</p>
       ) : (
+        <>
+        {needTotal > 0 && (() => {
+          // What the goals need a month against what is actually saved a month.
+          const short = saving !== null && saving < needTotal;
+          return <p className={`mb-3 rounded-xl border px-4 py-3 text-sm ${short ? "border-[var(--status-heads-up)]/30 bg-[var(--status-heads-up)]/10 text-[var(--status-heads-up)]" : "border-status-on-track/30 bg-status-on-track/10 text-status-on-track"}`}>
+            {t("needTotal", { need: $(needTotal) })}{saving !== null && <> {t(short ? "needShort" : "needCovered", { save: $(saving), gap: $(needTotal - saving) })}</>}
+          </p>;
+        })()}
+        <div role="group" aria-label={t("filterLabel")} className="mb-3 flex gap-1.5">
+          {(["all", "behind"] as const).map((f) => <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={`min-h-9 rounded-full px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring ${filter === f ? "bg-foreground font-medium text-background" : "bg-muted text-muted-foreground hover:text-foreground"}`}>{t(f === "all" ? "filterAll" : "filterBehind", { n: behindCount })}</button>)}
+        </div>
+        {([["active", shown.filter((g) => g.savedAmount < g.targetAmount)], ["ended", shown.filter((g) => g.savedAmount >= g.targetAmount)]] as const).filter(([, list]) => list.length > 0).map(([section, list]) => (
+        <section key={section} aria-label={t(section)} className="mb-4 last:mb-0">
+        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t(section)} · {list.length}</h3>
         <ul className="space-y-3">
-          {goals.map((g) => {
+          {list.map((g) => {
             const color = COLOR_VAR[g.color ?? "indigo"];
             const pct = Math.min(100, Math.max(0, (g.savedAmount / g.targetAmount) * 100));
             return (
               <li key={g.id} className="rounded-xl bg-muted/50 p-4">
                 <div className="flex items-start gap-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-full text-xl" style={{ backgroundColor: `color-mix(in oklab, ${color} 18%, transparent)` }} aria-hidden>{g.icon ?? "🎯"}</span>
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full text-xl" style={{ backgroundColor: `color-mix(in oklab, ${color} 18%, transparent)` }} aria-hidden>{g.icon && !/^[a-z-]+$/i.test(g.icon) ? g.icon : "🎯"}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{g.name}</p>
                     <p className="text-footnote text-muted-foreground">{t("savedOf", { saved: $(g.savedAmount), total: $(g.targetAmount) })}</p>
@@ -130,11 +152,14 @@ export function CustomGoals() {
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={g.name} aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
                   <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
                 </div>
-                <p className="mt-2 text-sm">{plan(g.targetAmount, g.savedAmount, g.dated === false ? null : g.targetDate, g.monthly ?? null)}</p>
+                <p className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm"><span>{plan(g.targetAmount, g.savedAmount, g.dated === false ? null : g.targetDate, g.monthly ?? null)}</span><span className="flex items-center gap-2">{isBehind(g) && <span className="rounded-full bg-[var(--status-heads-up)]/15 px-2 py-0.5 text-xs font-medium text-[var(--status-heads-up)]">{t("behindBadge")}</span>}<bdi className="font-semibold tabular-nums">{Math.round(pct)}%</bdi></span></p>
               </li>
             );
           })}
         </ul>
+        </section>
+        ))}
+        </>
       )}
     </CardShell>
   );

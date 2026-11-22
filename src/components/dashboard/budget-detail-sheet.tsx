@@ -705,6 +705,7 @@ function BudgetStat({
       {editing ? (
         <input
           ref={inputRef}
+          aria-label={tb("budget")}
           type="number"
           inputMode="numeric"
           min={0}

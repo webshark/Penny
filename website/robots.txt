@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://sergey-bar.github.io/Penny/sitemap.xml

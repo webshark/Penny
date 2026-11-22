@@ -23,7 +23,7 @@ export function HealthCard({ details = true }: { details?: boolean }) {
   const res = useQuery({ queryKey: ["resilience"], queryFn: getResilience });
   const cash = useQuery({ queryKey: ["cashflow-health"], queryFn: getCashflowHealth });
   if (res.isError) return null;
-  if (!res.data) return <Skeleton className={details ? "mb-6 h-56 rounded-2xl" : "h-56 rounded-2xl"} />;
+  if (!res.data) return <Skeleton className={details ? "mb-6 h-40 rounded-2xl" : "h-40 rounded-2xl"} />;
   const d = res.data;
   const r = 44;
   const c = 2 * Math.PI * r;
@@ -41,22 +41,22 @@ export function HealthCard({ details = true }: { details?: boolean }) {
         </span>
       }
     >
-      <div className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
+      <div className="grid grid-cols-[auto_1fr] items-center gap-4 sm:gap-5">
         <div className="flex justify-center">
-          <svg viewBox="0 0 100 100" className="size-32 -rotate-90" role="img" aria-label={t("scoreLabel", { score: d.score })}>
+          <svg viewBox="0 0 100 100" className="size-[5.5rem] -rotate-90" role="img" aria-label={t("scoreLabel", { score: d.score })}>
             <circle cx="50" cy="50" r={r} fill="none" stroke="var(--muted)" strokeWidth="9" />
-            <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(d.score / 100) * c} ${c}`} className="motion-safe:transition-[stroke-dasharray] motion-safe:duration-700" />
-            <text x="50" y="50" className="rotate-90 fill-foreground text-[26px] font-semibold tabular-nums" style={{ transformOrigin: "50px 50px" }} textAnchor="middle" dominantBaseline="central">{d.score}</text>
+            <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="11" strokeLinecap="round" strokeDasharray={`${(d.score / 100) * c} ${c}`} className="motion-safe:transition-[stroke-dasharray] motion-safe:duration-700" />
+            <text x="50" y="50" className="rotate-90 fill-foreground text-[30px] font-semibold tabular-nums" style={{ transformOrigin: "50px 50px" }} textAnchor="middle" dominantBaseline="central">{d.score}</text>
           </svg>
         </div>
 
-        <div className="min-w-0 space-y-3">
-          <p className="text-headline font-semibold">{t(`verdict_${d.band}`, { score: d.score })}</p>
-          <ul className="space-y-2.5" aria-label={t("howTitle")}>
+        <div className="min-w-0 space-y-2.5">
+          <p className="text-footnote font-semibold text-pretty">{t(`verdict_${d.band}`, { score: d.score })}</p>
+          <ul className="space-y-1.5" aria-label={t("howTitle")}>
             {d.factors.map((f) => (
-              <li key={f.key} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3 text-footnote">
+              <li key={f.key} className="grid grid-cols-[minmax(0,5.5rem)_1fr_auto] items-center gap-2 text-caption">
                 <span className="truncate">{t(`factor_${f.key}`)}</span>
-                <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
+                <span className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
                   <span className="block h-full rounded-full" style={{ width: `${(f.points / f.max) * 100}%`, backgroundColor: f.key === d.weakest && d.score < 100 ? "var(--status-heads-up)" : color }} />
                 </span>
                 <span className="tabular-nums text-muted-foreground" dir="ltr">{f.points}/{f.max}</span>
@@ -93,7 +93,7 @@ export function HealthCard({ details = true }: { details?: boolean }) {
           )}
           {d.score < 100 && <p className="text-footnote"><span className="font-medium">{t("nextStep")}</span> {t(`next_${d.weakest}`)}</p>}
           {d.ageOfMoney != null && (
-            <p className="flex items-center gap-1 border-t border-border/60 pt-3 text-footnote">
+            <p className="flex items-center gap-1 pt-1 text-caption">
               <span className="font-semibold tabular-nums">{t("ageOfMoney", { days: d.ageOfMoney })}</span>
               <InfoTip text={t("ageOfMoneyHint")} className="-my-3" />
             </p>

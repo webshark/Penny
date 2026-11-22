@@ -1,8 +1,11 @@
 import "server-only";
+import { israelDay } from "@/server/lib/date-utils";
 
+import { ownerClause } from "@/server/lib/owner-scope";
 import { getDb } from "../index";
 import { computeDedupHash } from "../../lib/dedup";
 import { detectKind } from "../../lib/transfers";
+import { BANK_PROVIDERS } from "@/lib/types";
 import type {
   TransactionWithCategory,
   MonthlySummary,
@@ -50,6 +53,17 @@ function dedupHashFor(txn: RawTransaction): string {
   });
 }
 
+/** A card company is connected, so the bank's card bill is money that already arrives as charges. */
+function hasCardCredential(workspaceId: number): boolean {
+  const cardProviders = BANK_PROVIDERS.filter((b) => b.kind === "card").map((b) => b.id);
+  if (cardProviders.length === 0) return false;
+  return (
+    getDb()
+      .prepare(`SELECT 1 FROM bank_credentials WHERE workspace_id = ? AND provider IN (${cardProviders.map(() => "?").join(",")}) LIMIT 1`)
+      .get(workspaceId, ...cardProviders) !== undefined
+  );
+}
+
 export function insertTransactions(
   workspaceId: number,
   transactions: RawTransaction[],
@@ -60,6 +74,7 @@ export function insertTransactions(
   const db = getDb();
   let added = 0;
   let updated = 0;
+  const cardExplainsBill = hasCardCredential(workspaceId);
 
   const hashCounts = new Map<string, number>();
 
@@ -116,13 +131,15 @@ export function insertTransactions(
       };
 
       const sequence = batchCount - 1;
-      const kind = detectKind(txn.description, provider, txn.chargedAmount);
+      const kind = detectKind(txn.description, provider, txn.chargedAmount, { cardExplainsBill });
 
       const params = {
         workspaceId,
         accountNumber: txn.accountNumber,
-        date: txn.date,
-        processedDate: txn.processedDate,
+        // Scrapers send UTC instants (Israeli midnight is 21:00/22:00Z the day before); stored as the Israeli day so
+        // every date-range query and month grouping sees the right day. The dedup hash above still uses the raw value.
+        date: israelDay(txn.date),
+        processedDate: txn.processedDate ? israelDay(txn.processedDate) : txn.processedDate,
         originalAmount: txn.originalAmount,
         originalCurrency: txn.originalCurrency,
         chargedAmount: txn.chargedAmount,
@@ -143,7 +160,7 @@ export function insertTransactions(
       };
 
       if (batchCount > existingCount) {
-        const twin = fileTwinStmt.get(workspaceId, txn.accountNumber, txn.chargedAmount, txn.date, txn.date) as { id: number } | undefined;
+        const twin = fileTwinStmt.get(workspaceId, txn.accountNumber, txn.chargedAmount, params.date, params.date) as { id: number } | undefined;
         if (twin) {
           adoptStmt.run({ ...params, id: twin.id });
           updated++;
@@ -184,6 +201,12 @@ interface QueryParams {
   /** @deprecated Use credentialIds */
   credentialId?: number;
   credentialIds?: number[];
+  /** Household member filter: rows this member owns, directly or through the account's default owner. */
+  owner?: { id: string; accounts: string[] };
+  /** Trash: only the rows hidden from totals, to bring back. */
+  hiddenOnly?: boolean;
+  /** Only one bank account or card (its account number), for the account page. */
+  accountNumber?: string;
   /** Review inbox: flagged by AI, or an expense/income with no category yet. */
   needsReview?: boolean;
   /** Only rows carrying this tag. */
@@ -239,8 +262,10 @@ export function queryTransactions(
     values.push(params.to);
   }
   if (params.search) {
-    conditions.push("(t.description LIKE ? OR t.memo LIKE ?)");
-    const term = `%${params.search}%`;
+    // A literal % or _ typed into the search box must not behave as a wildcard.
+    const escaped = params.search.replace(/[\\%_]/g, (c) => `\\${c}`);
+    conditions.push("(t.description LIKE ? ESCAPE '\\' OR t.memo LIKE ? ESCAPE '\\')");
+    const term = `%${escaped}%`;
     values.push(term, term);
   }
   if (params.categoryIds && params.categoryIds.length > 0) {
@@ -252,10 +277,12 @@ export function queryTransactions(
     values.push(params.category);
   }
   const kind: TransactionKindFilter = params.kind ?? "all";
+  // Group by kind, not by sign: a refund is a positive amount with kind='expense' and
+  // would otherwise show up under the income filter.
   if (kind === "income") {
-    conditions.push("t.charged_amount > 0");
+    conditions.push("t.kind = 'income'");
   } else if (kind === "expense") {
-    conditions.push("t.charged_amount < 0");
+    conditions.push("t.kind = 'expense'");
   }
   if (params.provider) {
     conditions.push("t.provider = ?");
@@ -269,19 +296,42 @@ export function queryTransactions(
         : undefined;
   appendCredentialIdsFilter(conditions, values, credentialIds, "t.");
   if (params.needsReview) {
-    conditions.push("(t.needs_review = 1 OR (t.category_id IS NULL AND t.kind != 'transfer'))");
+    // Hidden rows are out of every total, so asking to categorize them is noise.
+    conditions.push(
+      "t.is_excluded = 0 AND (t.needs_review = 1 OR (t.category_id IS NULL AND t.kind != 'transfer'))"
+    );
   }
   if (params.tag) {
     conditions.push("EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag = ?)");
     values.push(params.tag);
+  }
+  if (params.hiddenOnly) conditions.push("t.is_excluded = 1");
+  if (params.accountNumber) {
+    conditions.push("t.account_number = ?");
+    values.push(params.accountNumber);
+  }
+  if (params.owner) {
+    // The row's own owner wins; with none set, the account's default owner decides (same rule as effectiveOwner).
+    const accounts = params.owner.accounts;
+    conditions.push(`(t.owner = ? OR (t.owner IS NULL AND t.account_number IN (${accounts.map(() => "?").join(",") || "NULL"})))`);
+    values.push(params.owner.id, ...accounts);
   }
 
   const where = `WHERE ${conditions.join(" AND ")}`;
 
   const sortSql = resolveSortSql(params.sort);
   const sortOrder = params.order === "asc" ? "ASC" : "DESC";
-  const limit = Math.min(params.limit ?? 50, 200);
-  const offset = params.offset ?? 0;
+  // "limit=abc" from a hand-edited URL used to reach SQLite as NaN and throw a 500.
+  const rawLimit = params.limit;
+  const limit =
+    rawLimit != null && Number.isFinite(rawLimit)
+      ? Math.min(Math.max(Math.trunc(rawLimit), 1), 200)
+      : 50;
+  const rawOffset = params.offset;
+  const offset =
+    rawOffset != null && Number.isFinite(rawOffset)
+      ? Math.max(Math.trunc(rawOffset), 0)
+      : 0;
 
   const countRow = db
     .prepare(`SELECT COUNT(*) as total FROM transactions t ${where}`)
@@ -300,6 +350,24 @@ export function queryTransactions(
     transactions: rows.map(mapTransactionRow),
     total: countRow.total,
   };
+}
+
+/** Spend in the range that has no category yet, so the budget screen can show it instead of dropping it. */
+export function getUncategorizedSpend(
+  workspaceId: number,
+  from: string,
+  to: string
+): { spent: number; count: number } {
+  const o = ownerClause();
+  const row = getDb()
+    .prepare(
+      `SELECT COALESCE(SUM(-charged_amount), 0) as spent, COUNT(*) as count
+       FROM transactions
+       WHERE workspace_id = ? AND date >= ? AND date <= ? AND status = 'completed'
+         AND is_excluded = 0 AND kind = 'expense' AND category_id IS NULL${o.sql}`
+    )
+    .get(workspaceId, from, to, ...o.params) as { spent: number; count: number };
+  return { spent: row.spent, count: row.count };
 }
 
 export function getUncategorizedTransactionIds(workspaceId: number): number[] {
@@ -376,20 +444,21 @@ export function getMonthlySummary(
   workspaceId: number,
   months: number
 ): MonthlySummary[] {
+  const o = ownerClause();
   return getDb()
     .prepare(
       `SELECT strftime('%Y-%m', date) as month,
-              SUM(-charged_amount) as amount
+              SUM(-personal_amount) as amount
        FROM transactions
        WHERE workspace_id = ?
          AND date >= date('now', '-' || ? || ' months')
          AND status = 'completed'
          AND kind = 'expense'
-         AND is_excluded = 0
+         AND is_excluded = 0${o.sql}
        GROUP BY month
        ORDER BY month ASC`
     )
-    .all(workspaceId, months) as MonthlySummary[];
+    .all(workspaceId, months, ...o.params) as MonthlySummary[];
 }
 
 export function getTopMerchants(
@@ -398,19 +467,20 @@ export function getTopMerchants(
   to: string,
   limit = 10
 ): MerchantSummary[] {
+  const o = ownerClause();
   return getDb()
     .prepare(
       `SELECT description as name,
-              SUM(-charged_amount) as amount,
+              SUM(-personal_amount) as amount,
               COUNT(*) as count
        FROM transactions
        WHERE workspace_id = ? AND date >= ? AND date <= ? AND status = 'completed' AND kind = 'expense'
-         AND is_excluded = 0
+         AND is_excluded = 0${o.sql}
        GROUP BY description
        ORDER BY amount DESC
        LIMIT ?`
     )
-    .all(workspaceId, from, to, limit) as MerchantSummary[];
+    .all(workspaceId, from, to, ...o.params, limit) as MerchantSummary[];
 }
 
 export function getCategoryBreakdown(
@@ -418,22 +488,23 @@ export function getCategoryBreakdown(
   from: string,
   to: string
 ): CategoryBreakdown[] {
+  const o = ownerClause("t");
   return getDb()
     .prepare(
       `SELECT
          COALESCE(t.category_id, 0) as categoryId,
          COALESCE(c.name, 'Uncategorized') as name,
          COALESCE(c.color, '#B5B3AC') as color,
-         SUM(-t.charged_amount) as amount,
+         SUM(-t.personal_amount) as amount,
          COUNT(DISTINCT t.id) as count
        FROM category_transactions t
        LEFT JOIN categories c ON t.category_id = c.id
        WHERE t.workspace_id = ? AND t.date >= ? AND t.date <= ? AND t.status = 'completed' AND t.kind = 'expense'
-         AND t.is_excluded = 0
+         AND t.is_excluded = 0${o.sql}
        GROUP BY t.category_id
        ORDER BY amount DESC`
     )
-    .all(workspaceId, from, to) as CategoryBreakdown[];
+    .all(workspaceId, from, to, ...o.params) as CategoryBreakdown[];
 }
 
 export interface CategorySpend {
@@ -447,17 +518,18 @@ export function getCategorySpendInRange(
   from: string,
   to: string
 ): CategorySpend[] {
+  const o = ownerClause();
   return getDb()
     .prepare(
       `SELECT category_id as categoryId,
-              SUM(-charged_amount) as amount,
+              SUM(-personal_amount) as amount,
               COUNT(DISTINCT id) as count
        FROM category_transactions
        WHERE workspace_id = ? AND date >= ? AND date <= ? AND status = 'completed' AND kind = 'expense' AND category_id IS NOT NULL
-         AND is_excluded = 0
+         AND is_excluded = 0${o.sql}
        GROUP BY category_id`
     )
-    .all(workspaceId, from, to) as CategorySpend[];
+    .all(workspaceId, from, to, ...o.params) as CategorySpend[];
 }
 
 export interface CategoryTopMerchant {
@@ -471,20 +543,21 @@ export function getTopMerchantPerCategory(
   from: string,
   to: string
 ): CategoryTopMerchant[] {
+  const o = ownerClause();
   return getDb()
     .prepare(
       `SELECT category_id as categoryId, description as merchant, amount
        FROM (
-         SELECT category_id, description, SUM(-charged_amount) as amount,
-                ROW_NUMBER() OVER (PARTITION BY category_id ORDER BY SUM(-charged_amount) DESC) as rn
+         SELECT category_id, description, SUM(-personal_amount) as amount,
+                ROW_NUMBER() OVER (PARTITION BY category_id ORDER BY SUM(-personal_amount) DESC) as rn
          FROM category_transactions
          WHERE workspace_id = ? AND date >= ? AND date <= ? AND status = 'completed' AND kind = 'expense' AND category_id IS NOT NULL
-           AND is_excluded = 0
+           AND is_excluded = 0${o.sql}
          GROUP BY category_id, description
        )
        WHERE rn = 1`
     )
-    .all(workspaceId, from, to) as CategoryTopMerchant[];
+    .all(workspaceId, from, to, ...o.params) as CategoryTopMerchant[];
 }
 
 export interface DailySpendPoint {
@@ -506,7 +579,7 @@ export function getCategorySpendByDay(
          SELECT date(d, '+1 day') FROM days WHERE d < date(?)
        )
        SELECT days.d as date,
-              COALESCE(SUM(-t.charged_amount), 0) as amount
+              COALESCE(SUM(-t.personal_amount), 0) as amount
        FROM days
        LEFT JOIN category_transactions t
          ON substr(t.date, 1, 10) = days.d
@@ -537,7 +610,7 @@ export function getTopMerchantsForCategory(
   return getDb()
     .prepare(
       `SELECT description as merchant,
-              SUM(-charged_amount) as amount,
+              SUM(-personal_amount) as amount,
               COUNT(DISTINCT id) as count
        FROM category_transactions
        WHERE workspace_id = ? AND category_id = ?
@@ -557,14 +630,15 @@ export function getPeriodTotal(
   from: string,
   to: string
 ): number {
+  const o = ownerClause();
   const row = getDb()
     .prepare(
-      `SELECT COALESCE(SUM(-charged_amount), 0) as total
+      `SELECT COALESCE(SUM(-personal_amount), 0) as total
        FROM transactions
        WHERE workspace_id = ? AND date >= ? AND date <= ? AND status = 'completed' AND kind = 'expense'
-         AND is_excluded = 0`
+         AND is_excluded = 0${o.sql}`
     )
-    .get(workspaceId, from, to) as { total: number };
+    .get(workspaceId, from, to, ...o.params) as { total: number };
   return row.total;
 }
 
@@ -573,14 +647,15 @@ export function getPeriodCount(
   from: string,
   to: string
 ): number {
+  const o = ownerClause();
   const row = getDb()
     .prepare(
       `SELECT COUNT(*) as count
        FROM transactions
        WHERE workspace_id = ? AND date >= ? AND date <= ? AND status = 'completed' AND kind = 'expense'
-         AND is_excluded = 0`
+         AND is_excluded = 0${o.sql}`
     )
-    .get(workspaceId, from, to) as { count: number };
+    .get(workspaceId, from, to, ...o.params) as { count: number };
   return row.count;
 }
 
@@ -608,6 +683,7 @@ interface TransactionRow {
   credential_id: number | null;
   sync_run_id: number;
   kind: string;
+  business_share_pct: number;
   needs_review: number;
   is_excluded: number;
   owner?: string | null;
@@ -645,6 +721,7 @@ function mapTransactionRow(row: unknown): TransactionWithCategory {
     accountLabel: r.account_label ?? null,
     syncRunId: r.sync_run_id,
     kind: r.kind as "expense" | "income" | "transfer",
+    businessSharePct: r.business_share_pct ?? 0,
     needsReview: r.needs_review === 1,
     isExcluded: r.is_excluded === 1,
     createdAt: r.created_at,
@@ -777,11 +854,13 @@ export function getTransactionsSummary(
   appendCredentialIdsFilter(baseConditions, baseValues, summaryCredentialIds);
   const baseWhere = baseConditions.join(" AND ");
 
+  // Group by kind, not by sign: a refund is a positive amount with kind='expense' and must reduce
+  // spending instead of counting as income.
   const incomeAgg = db
     .prepare(
       `SELECT COALESCE(SUM(charged_amount), 0) as total, COUNT(*) as count
        FROM transactions
-       WHERE ${baseWhere} AND charged_amount > 0`
+       WHERE ${baseWhere} AND kind = 'income'`
     )
     .get(...baseValues) as { total: number; count: number };
 
@@ -789,19 +868,19 @@ export function getTransactionsSummary(
     .prepare(
       `SELECT COALESCE(SUM(-charged_amount), 0) as total, COUNT(*) as count
        FROM transactions
-       WHERE ${baseWhere} AND charged_amount < 0`
+       WHERE ${baseWhere} AND kind = 'expense'`
     )
     .get(...baseValues) as { total: number; count: number };
 
   const pickLargest = (sign: "income" | "expense"): TransactionWithCategory | null => {
-    const cmp = sign === "income" ? "> 0" : "< 0";
+    const kind = sign === "income" ? "income" : "expense";
     const tConditions = [
       "t.workspace_id = ?",
       "t.date >= ?",
       "t.date <= ?",
       "t.status = 'completed'",
       "t.is_excluded = 0",
-      `t.charged_amount ${cmp}`,
+      `t.kind = '${kind}'`,
     ];
     const tValues: (string | number)[] = [workspaceId, from, to];
     appendCredentialIdsFilter(tConditions, tValues, summaryCredentialIds, "t.");
@@ -822,7 +901,7 @@ export function getTransactionsSummary(
               SUM(-charged_amount) as total,
               COUNT(*) as count
        FROM transactions
-       WHERE ${baseWhere} AND charged_amount < 0
+       WHERE ${baseWhere} AND kind = 'expense'
        GROUP BY description
        ORDER BY total DESC
        LIMIT 5`
@@ -930,7 +1009,7 @@ export function setTransactionOwner(workspaceId: number, id: number, owner: stri
 export function getTagRows(workspaceId: number): import("@/lib/tags").TagRow[] {
   return getDb()
     .prepare(
-      `SELECT tt.tag, t.charged_amount AS amount, t.date, c.name AS category
+      `SELECT tt.tag, t.personal_amount AS amount, t.date, c.name AS category
        FROM transaction_tags tt
        JOIN transactions t ON t.id = tt.transaction_id
        LEFT JOIN categories c ON c.id = t.category_id
@@ -939,10 +1018,50 @@ export function getTagRows(workspaceId: number): import("@/lib/tags").TagRow[] {
     .all(workspaceId) as import("@/lib/tags").TagRow[];
 }
 
+/** Renames a tag on every transaction; transactions that already carry the new name keep one copy. */
+export function renameTag(workspaceId: number, from: string, to: string): number {
+  const db = getDb();
+  return db.transaction(() => {
+    const moved = db.prepare("UPDATE OR IGNORE transaction_tags SET tag = ? WHERE workspace_id = ? AND tag = ?").run(to, workspaceId, from).changes;
+    db.prepare("DELETE FROM transaction_tags WHERE workspace_id = ? AND tag = ?").run(workspaceId, from);
+    return moved;
+  })();
+}
+
+/** Removes a tag from every transaction (the transactions stay). */
+export function deleteTag(workspaceId: number, tag: string): number {
+  return getDb().prepare("DELETE FROM transaction_tags WHERE workspace_id = ? AND tag = ?").run(workspaceId, tag).changes;
+}
+
+/** Currencies in use: transactions by original currency plus assets, with how many of each. */
+export function getCurrencyUsage(workspaceId: number): { currency: string; transactions: number; assets: number }[] {
+  return getDb()
+    .prepare(
+      `SELECT currency, SUM(tx) AS transactions, SUM(asset) AS assets FROM (
+         SELECT UPPER(original_currency) AS currency, 1 AS tx, 0 AS asset FROM transactions WHERE workspace_id = ? AND original_currency IS NOT NULL AND original_currency != ''
+         UNION ALL
+         SELECT UPPER(currency), 0, 1 FROM assets WHERE workspace_id = ? AND currency IS NOT NULL AND currency != ''
+       ) GROUP BY currency ORDER BY transactions + assets DESC`
+    )
+    .all(workspaceId, workspaceId) as { currency: string; transactions: number; assets: number }[];
+}
+
+/** Every merchant (transaction description) with its count, spend and last date, most used first. */
+export function getMerchantRows(workspaceId: number): { merchant: string; count: number; total: number; last: string }[] {
+  return getDb()
+    .prepare(
+      `SELECT description AS merchant, COUNT(*) AS count, ROUND(SUM(personal_amount), 2) AS total, MAX(date) AS last
+       FROM transactions
+       WHERE workspace_id = ? AND is_excluded = 0 AND kind != 'transfer'
+       GROUP BY description ORDER BY count DESC, merchant LIMIT 1000`
+    )
+    .all(workspaceId) as { merchant: string; count: number; total: number; last: string }[];
+}
+
 export function getOwnerRows(workspaceId: number, from: string, to: string): import("@/lib/tags").OwnerRow[] {
   return getDb()
     .prepare(
-      `SELECT charged_amount AS amount, owner, account_number AS accountNumber
+      `SELECT personal_amount AS amount, owner, account_number AS accountNumber
        FROM transactions
        WHERE workspace_id = ? AND date >= ? AND date <= ? AND kind = 'expense' AND is_excluded = 0 AND charged_amount < 0`
     )
@@ -1018,7 +1137,9 @@ export function storedForImport(workspaceId: number, account: string, from: stri
 export function insertFileImport(
   workspaceId: number,
   account: string,
-  rows: { date: string; description: string; amount: number; seq: number }[]
+  rows: { date: string; description: string; amount: number; seq: number }[],
+  /** Card statements carry refunds as positive amounts, which must stay expenses (not income). */
+  source: "bank" | "card" = "bank",
 ): { batchId: number; added: number } {
   const db = getDb();
   return db.transaction(() => {
@@ -1033,15 +1154,39 @@ export function insertFileImport(
        VALUES (?, ?, ?, ?, ?, 'ILS', ?, 'ILS', ?, 'normal', 'completed', 'file', ?, ?, ?, ?)
        ON CONFLICT(workspace_id, dedup_hash, dedup_sequence) DO NOTHING`
     );
+    const cardExplainsBill = hasCardCredential(workspaceId);
     let added = 0;
     for (const r of rows) {
       const hash = computeDedupHash({ accountNumber: account, date: r.date, originalAmount: r.amount, originalCurrency: "ILS", description: r.description });
-      // A statement has no provider type, so classify it like a bank row: transfer patterns, else sign.
-      const kind = detectKind(r.description, "hapoalim", r.amount);
+      // A statement has no provider type; classify it like the matching source: bank transfer
+      // patterns and sign, or a card row (always an expense, refunds included).
+      const kind = detectKind(r.description, source === "card" ? "isracard" : "hapoalim", r.amount, { cardExplainsBill });
       added += stmt.run(workspaceId, account, r.date, r.date, r.amount, r.amount, r.description, runId, hash, r.seq, kind).changes;
     }
     return { batchId: runId, added };
   })();
+}
+
+/** How many rows of one import batch got a category from rules or merchant memory. */
+export function countBatchCategories(workspaceId: number, batchId: number): { categorized: number; total: number } {
+  const row = getDb()
+    .prepare(
+      `SELECT COUNT(*) AS total, SUM(CASE WHEN category_id IS NOT NULL THEN 1 ELSE 0 END) AS categorized
+       FROM transactions WHERE workspace_id = ? AND sync_run_id = ? AND provider = 'file'`
+    )
+    .get(workspaceId, batchId) as { total: number; categorized: number | null };
+  return { total: row.total, categorized: row.categorized ?? 0 };
+}
+
+/** Flags uncategorized imported expenses for the review queue, the same way a sync does. */
+export function flagBatchForReview(workspaceId: number, batchId: number): number {
+  return getDb()
+    .prepare(
+      `UPDATE transactions SET needs_review = 1
+       WHERE workspace_id = ? AND sync_run_id = ? AND provider = 'file'
+         AND needs_review = 0 AND category_id IS NULL AND kind != 'transfer'`
+    )
+    .run(workspaceId, batchId).changes;
 }
 
 /** Undo for one import: removes only that batch's rows (provider 'file'). */

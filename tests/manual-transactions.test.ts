@@ -53,11 +53,27 @@ describe("manual transactions", () => {
   });
   it("delete returns a snapshot that re-creates the row (undo), scoped to the workspace", () => {
     const { db, ws, expense, get } = fixture();
-    const id = createManualTransaction(db, ws, { ...base, categoryId: expense, tags: ["a"] }, []);
+    const id = createManualTransaction(db, ws, { ...base, categoryId: expense, tags: ["a"], businessSharePct: 25 }, []);
     expect(() => deleteManualTransaction(db, ws + 100, id)).toThrow(/not found/);
     const snap = deleteManualTransaction(db, ws, id);
     expect(get(id)).toBeUndefined();
     const again = createManualTransaction(db, ws, snap, []);
-    expect(get(again)).toMatchObject({ charged_amount: -42.5, description: "Coffee", category_id: expense, date: "2026-11-10" });
+    expect(get(again)).toMatchObject({ charged_amount: -42.5, description: "Coffee", category_id: expense, date: "2026-11-10", business_share_pct: 25 });
+  });
+  it("keeps the real charge and derives the personal part from a business share", () => {
+    const { db, ws, expense, get } = fixture();
+    const id = createManualTransaction(db, ws, { ...base, categoryId: expense, businessSharePct: 40 }, []);
+    expect(get(id)).toMatchObject({ charged_amount: -42.5, business_share_pct: 40, personal_amount: -25.5 });
+    // A bank row keeps its amount; the user only tags the business part.
+    updateTransactionFields(db, ws, 1, { businessSharePct: 50 }, []);
+    expect(get(1)).toMatchObject({ charged_amount: -100, business_share_pct: 50, personal_amount: -50 });
+    updateTransactionFields(db, ws, 1, { businessSharePct: 0 }, []);
+    expect(get(1)).toMatchObject({ personal_amount: -100 });
+  });
+  it("rejects a business share that is not a whole percent in range", () => {
+    const { db, ws, get } = fixture();
+    for (const businessSharePct of [-1, 101, 12.5, "20", null])
+      expect(() => updateTransactionFields(db, ws, 1, { businessSharePct }, []), String(businessSharePct)).toThrow(/business/);
+    expect(get(1)).toMatchObject({ business_share_pct: 0 });
   });
 });

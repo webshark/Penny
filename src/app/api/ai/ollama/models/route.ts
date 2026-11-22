@@ -4,8 +4,12 @@ import {
   listOllamaModels,
 } from "@/server/ai/ollama-manager";
 import { getGlobalSetting } from "@/server/db/queries/settings";
+import { demoBlockedResponse } from "@/server/demo/guard";
 
 export async function GET(request: Request) {
+  const blocked = demoBlockedResponse();
+  if (blocked) return blocked;
+
   const { searchParams } = new URL(request.url);
   const url =
     searchParams.get("url") ??

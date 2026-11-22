@@ -33,19 +33,19 @@ export function NeedsAttentionCard({ data }: Props) {
           icon={<CircleHelp className="h-4 w-4" />}
           label={t("needsAttentionUncategorized")}
           count={uncategorized}
-          href="/transactions"
+          href="/transactions?review=1"
         />
         <Row
           icon={<AlertTriangle className="h-4 w-4" />}
           label={t("needsAttentionLowConfidence")}
           count={lowConfidence}
-          href="/transactions"
+          href="/transactions?review=1"
         />
         <Row
           icon={<Flag className="h-4 w-4" />}
           label={t("needsAttentionFlagged")}
           count={flagged}
-          href="/transactions"
+          href="/transactions?review=1"
         />
       </ul>
     </CardShell>

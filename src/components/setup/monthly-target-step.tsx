@@ -83,10 +83,10 @@ export function MonthlyTargetStep({ onComplete, onBack }: MonthlyTargetStepProps
       </div>
 
       <footer className="flex items-center justify-between pt-2">
-        <IconButton label={t("aiBackButton")} variant="outline" onClick={onBack} disabled={saving}>
+        <IconButton showLabel label={t("aiBackButton")} variant="outline" onClick={onBack} disabled={saving}>
           <Back />
         </IconButton>
-        <IconButton
+        <IconButton showLabel
           label={saving ? t("aiSavingButton") : t("aiContinueButton")}
           variant="default"
           onClick={() => save(valid ? parsed : null)}

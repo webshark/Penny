@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import { getMarkets } from "@/lib/api";
+import { addMarketSymbol, getMarkets, removeMarketSymbol } from "@/lib/api";
+import { normalizeSymbol } from "@/lib/markets";
 import { CardShell } from "@/components/home/card-shell";
-import { RotateCw } from "lucide-react";
+import { RotateCw, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkline } from "@/components/ui/sparkline";
@@ -43,38 +46,99 @@ export function MarketsView() {
     );
   }
 
-  const stale = query.data.items.some((i) => i.quote?.stale);
+  const items = query.data.items;
+  const stale = items.some((i) => i.quote?.stale);
+  // Watching comes first: it is the part of this page that belongs to the household.
+  const groups = (["watch", ...GROUPS] as const).filter((g) => g === "watch" || items.some((i) => i.group === g));
   return (
     <div className="space-y-6 md:space-y-8">
       {stale && <p className="text-footnote text-status-heads-up" role="status">{t("staleNotice")}</p>}
-      {GROUPS.map((g) => (
-        <section key={g} aria-labelledby={`mk-${g}`}>
-          <h3 id={`mk-${g}`} className="mb-3 px-1 text-headline font-semibold">{t(`group_${g}`)}</h3>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {query.data.items.filter((i) => i.group === g).map((i) => <Tile key={i.symbol} item={i} />)}
-          </ul>
-        </section>
-      ))}
+      {groups.map((g) => {
+        const rows = items.filter((i) => i.group === g);
+        return (
+          <section key={g} aria-labelledby={`mk-${g}`}>
+            <h3 id={`mk-${g}`} className="mb-3 px-1 text-headline font-semibold">{t(`group_${g}`)}</h3>
+            {g === "watch" && <WatchForm onAdded={() => void query.refetch()} />}
+            {g === "watch" && rows.length === 0 && <p className="px-1 text-footnote text-muted-foreground">{t("watchEmpty")}</p>}
+            {rows.length > 0 && (
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {rows.map((i) => (
+                  <Tile key={i.symbol} item={i} onRemove={g === "watch" ? () => { void removeMarketSymbol(i.symbol).then(() => query.refetch(), () => {}); } : undefined} />
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
       <p className="px-1 text-caption text-muted-foreground">{t("source")}</p>
     </div>
   );
 }
 
-function Tile({ item }: { item: MarketsPayload["items"][number] }) {
+/** One ticker to follow: typed the way Yahoo Finance spells it (AAPL, TEVA.TA, BTC-USD). */
+function WatchForm({ onAdded }: { onAdded: () => void }) {
+  const t = useTranslations("markets");
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <form
+      className="mb-3 flex flex-wrap items-center gap-2"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const symbol = normalizeSymbol(value);
+        if (!symbol) { setFailed(true); return; }
+        setBusy(true);
+        try {
+          await addMarketSymbol(symbol);
+          setValue("");
+          setFailed(false);
+          onAdded();
+        } catch { setFailed(true); }
+        finally { setBusy(false); }
+      }}
+    >
+      <input
+        value={value}
+        onChange={(e) => { setValue(e.target.value); setFailed(false); }}
+        placeholder={t("symbolPlaceholder")}
+        aria-label={t("symbolPlaceholder")}
+        aria-invalid={failed}
+        dir="ltr"
+        autoComplete="off"
+        spellCheck={false}
+        className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+      />
+      <Button type="submit" disabled={busy} className="min-h-11">{t("addSymbol")}</Button>
+      {failed && <p role="alert" className="w-full text-footnote text-destructive">{t("addFailed")}</p>}
+    </form>
+  );
+}
+
+function Tile({ item, onRemove }: { item: MarketsPayload["items"][number]; onRemove?: () => void }) {
   const t = useTranslations("markets");
   const locale = useLocale();
   const q = item.quote;
-  const name = t(`symbols.${item.key}`);
+  // A followed ticker has no translation: the quote carries the company's own name, the symbol is the fallback.
+  const name = item.group === "watch" ? q?.name ?? item.symbol : t(`symbols.${item.key}`);
   return (
-    <li className="rounded-2xl bg-card p-5">
+    <li className="relative rounded-2xl bg-card p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-footnote font-semibold">{name}</h3>
           <p className="text-caption text-muted-foreground" dir="ltr">{item.symbol}</p>
         </div>
-        <span className={cn("text-footnote font-semibold tabular-nums", tone(q?.changeDay ?? null))} dir="ltr">
-          {pct(q?.changeDay ?? null)}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className={cn("text-footnote font-semibold tabular-nums", tone(q?.changeDay ?? null))} dir="ltr">
+            {pct(q?.changeDay ?? null)}
+          </span>
+          {onRemove && (
+            <button type="button" onClick={onRemove} aria-label={t("removeSymbol", { symbol: item.symbol })} title={t("removeSymbol", { symbol: item.symbol })}
+              className="-me-2 grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+              <X className="size-4" aria-hidden />
+            </button>
+          )}
+        </div>
       </div>
       {q ? (
         <>

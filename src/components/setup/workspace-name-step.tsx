@@ -92,7 +92,7 @@ export function WorkspaceNameStep({
           {t("workspaceRenameHint")}
         </p>
 
-        <IconButton
+        <IconButton showLabel
           label={submitting ? t("workspaceCreating") : t("workspaceCreateButton")}
           variant="default"
           type="submit"

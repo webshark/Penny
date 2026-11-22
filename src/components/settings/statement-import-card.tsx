@@ -1,40 +1,70 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { FileUp } from "lucide-react";
+import { FileUp, Upload } from "lucide-react";
 import { importStatement, undoStatementImport } from "@/lib/api";
-import { buildImportRows, findHeaderRow, guessColumns, IMPORT_EXTS, IMPORT_FIELDS, MAX_IMPORT_ROWS, readStatementTable, type ImportMap } from "@/lib/file-import";
+import {
+  buildImportRows,
+  detectDateOrder,
+  fallbackHeaderRow,
+  findHeaderRow,
+  guessColumns,
+  IMPORT_EXTS,
+  IMPORT_FIELDS,
+  inferPositiveIsExpense,
+  MAX_IMPORT_ROWS,
+  readStatementTable,
+  scanAmounts,
+  type DateOrder,
+  type ImportMap,
+} from "@/lib/file-import";
 import { SettingCard } from "@/components/settings/section-shell";
 import { ImportGuide } from "@/components/settings/import-guide";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const NONE = "none";
+const PREVIEW_ROWS = 5;
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const shortDate = (iso: string) => iso.split("-").reverse().join("/");
 
-export function StatementImportCard() {
+export function StatementImportCard({ defaultAccount = "" }: { defaultAccount?: string }) {
   const t = useTranslations("fileImport");
   const queryClient = useQueryClient();
   const [table, setTable] = useState<string[][]>([]);
   const [headerRow, setHeaderRow] = useState(0);
   const [map, setMap] = useState<ImportMap | null>(null);
-  const [account, setAccount] = useState("");
+  const [dateOrder, setDateOrder] = useState<DateOrder>("dmy");
+  const [account, setAccount] = useState(defaultAccount);
   const [positiveIsExpense, setPositiveIsExpense] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [inputKey, setInputKey] = useState(0);
   const [fileName, setFileName] = useState("");
+  const [reading, setReading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  // The institution picked in the manual panel names the account, so imports dedupe per bank.
+  const appliedDefault = useRef("");
+  useEffect(() => {
+    if (defaultAccount && defaultAccount !== appliedDefault.current) {
+      appliedDefault.current = defaultAccount;
+      setAccount(defaultAccount);
+    }
+  }, [defaultAccount]);
 
   const header = table[headerRow] ?? [];
   const { rows, skipped } = useMemo(
-    () => (map ? buildImportRows(table.slice(headerRow + 1), map, positiveIsExpense) : { rows: [], skipped: 0 }),
-    [table, headerRow, map, positiveIsExpense],
+    () => (map ? buildImportRows(table.slice(headerRow + 1), map, positiveIsExpense, dateOrder) : { rows: [], skipped: 0 }),
+    [table, headerRow, map, positiveIsExpense, dateOrder],
   );
   const tooMany = rows.length > MAX_IMPORT_ROWS;
+  const amountOnly = !!map && map.amount != null && map.debit == null && map.credit == null;
+  const mappingIncomplete = !!map && (map.date == null || map.description == null || (map.amount == null && map.debit == null && map.credit == null));
   const deferredAccount = useDeferredValue(account.trim());
   // Synced accounts, so a statement lands on the same account as the bank sync and dedupes against it.
   const accounts = useQuery({
@@ -44,9 +74,17 @@ export function StatementImportCard() {
 
   const check = useQuery({
     queryKey: ["file-import-check", deferredAccount, rows],
-    queryFn: () => importStatement(deferredAccount, rows, true),
+    queryFn: () => importStatement(deferredAccount, rows, true, positiveIsExpense ? "card" : "bank"),
     enabled: !!deferredAccount && rows.length > 0 && !tooMany,
   });
+
+  const range = rows.length
+    ? {
+        from: rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0].date),
+        to: rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0].date),
+      }
+    : null;
+  const expensesTotal = rows.reduce((sum, r) => (r.amount < 0 ? sum - r.amount : sum), 0);
 
   function reset() {
     setTable([]);
@@ -57,47 +95,78 @@ export function StatementImportCard() {
   }
 
   const save = useMutation({
-    mutationFn: () => importStatement(account.trim(), rows),
+    mutationFn: () => importStatement(account.trim(), rows, false, positiveIsExpense ? "card" : "bank"),
     onSuccess: (res) => {
       const refresh = () => {
-        for (const key of ["transactions", "summary", "home", "file-import-check"]) queryClient.invalidateQueries({ queryKey: [key] });
+        for (const key of ["transactions", "summary", "home", "file-import-check", "import-accounts"])
+          queryClient.invalidateQueries({ queryKey: [key] });
       };
       refresh();
       reset();
       const batchId = res.batchId;
-      toast.success(t("saved", { added: res.added, duplicates: res.duplicates }), batchId
-        ? { action: { label: t("undo"), onClick: () => void undoStatementImport(batchId).then(refresh) } }
-        : undefined);
+      toast.success(
+        res.categorized > 0
+          ? t("savedCategorized", { added: res.added, categorized: res.categorized, review: res.needsReview })
+          : t("saved", { added: res.added, duplicates: res.duplicates }),
+        batchId
+          ? { action: { label: t("undo"), onClick: () => void undoStatementImport(batchId).then(refresh) } }
+          : undefined,
+      );
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : t("saveFailed")),
   });
 
+  function applyTable(parsed: string[][]) {
+    const found = findHeaderRow(parsed);
+    const headerIndex = found >= 0 ? found : fallbackHeaderRow(parsed);
+    const guessed = guessColumns(parsed[headerIndex] ?? []);
+    const body = parsed.slice(headerIndex + 1);
+    setTable(parsed);
+    setHeaderRow(headerIndex);
+    setMap(guessed);
+    setDateOrder(detectDateOrder(guessed.date == null ? [] : body.map((r) => r[guessed.date!] ?? "")));
+    setPositiveIsExpense(inferPositiveIsExpense(scanAmounts(body, guessed)));
+  }
+
+  function changeHeaderRow(next: number) {
+    const guessed = guessColumns(table[next] ?? []);
+    const body = table.slice(next + 1);
+    setHeaderRow(next);
+    setMap(guessed);
+    setDateOrder(detectDateOrder(guessed.date == null ? [] : body.map((r) => r[guessed.date!] ?? "")));
+    setPositiveIsExpense(inferPositiveIsExpense(scanAmounts(body, guessed)));
+  }
+
   async function onFile(file: File | undefined) {
     setError(null);
+    if (!file) return;
+    setReading(true);
     setTable([]);
     setMap(null);
-    if (!file) return;
-    const name = file.name.toLowerCase();
+    setFileName(file.name);
     try {
+      if (file.size > MAX_FILE_BYTES) { setError(t("tooLarge")); return; }
       let parsed: string[][];
       try {
-        parsed = await readStatementTable(new Uint8Array(await file.arrayBuffer()), name);
+        parsed = await readStatementTable(new Uint8Array(await file.arrayBuffer()), file.name);
       } catch (e) {
-        if (e instanceof Error && e.message === "xlsNotSupported") { setError(t("xlsNotSupported")); return; }
-        throw e;
+        const code = e instanceof Error ? e.message : "";
+        setError(code === "xlsNotSupported" ? t("xlsNotSupported") : code === "pdf" ? t("pdf") : t("readFailed"));
+        return;
       }
-      const h = findHeaderRow(parsed);
-      if (h < 0) { setError(t("noHeader")); return; }
-      setTable(parsed);
-      setHeaderRow(h);
-      setMap(guessColumns(parsed[h]));
+      if (parsed.length === 0) { setError(t("emptyFile")); return; }
+      applyTable(parsed);
+      setAccount((current) => current || file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 40));
     } catch {
       setError(t("readFailed"));
+    } finally {
+      setReading(false);
     }
   }
 
   const ready = check.data?.ready ?? rows.length;
   const duplicates = check.data?.duplicates ?? 0;
+  const hasTable = table.length > 0 && map != null;
 
   return (
     <SettingCard title={t("title")} description={t("description")}>
@@ -106,57 +175,68 @@ export function StatementImportCard() {
           <summary className="cursor-pointer text-footnote font-medium">{t("guide.title")}</summary>
           <div className="pt-3"><ImportGuide /></div>
         </details>
-        <div className="space-y-1.5">
-          <Label htmlFor="statement-file">{t("file")}</Label>
-          {/* The native picker's text follows the browser's language, not the app's; ours is translated. */}
-          <div className="flex min-w-0 items-center gap-3">
+
+        {!hasTable ? (
+          <label
+            htmlFor="statement-file"
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); void onFile(e.dataTransfer.files?.[0]); }}
+            className={`flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center transition-colors ${
+              dragging ? "border-primary bg-primary/5" : "bg-muted/20 hover:bg-muted/40"
+            }`}
+          >
+            <Upload className="size-6 text-muted-foreground" aria-hidden />
+            <span className="text-sm font-medium">{reading ? t("reading") : t("dropHere")}</span>
+            <span className="text-caption text-muted-foreground">{t("fileHint")}</span>
             <input
               key={inputKey}
               id="statement-file"
               type="file"
               accept={`${IMPORT_EXTS.join(",")},text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`}
-              onChange={(e) => { setFileName(e.target.files?.[0]?.name ?? ""); void onFile(e.target.files?.[0]); }}
-              className="peer sr-only"
+              onChange={(e) => void onFile(e.target.files?.[0])}
+              className="sr-only"
+              disabled={reading}
             />
-            <label htmlFor="statement-file" className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-secondary px-4 text-footnote font-medium text-secondary-foreground hover:bg-secondary/80 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring">
-              <FileUp className="size-4" aria-hidden />
-              {t("choose")}
-            </label>
-            <span className="min-w-0 truncate text-footnote text-muted-foreground" title={fileName || undefined}>{fileName || t("noFile")}</span>
-          </div>
-          <p className="text-caption text-muted-foreground">{t("fileHint")}</p>
-        </div>
-
-        {error && <p className="rounded-xl bg-muted/50 px-3 py-2 text-footnote" role="status">{error}</p>}
-
-        {map && (
+          </label>
+        ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {IMPORT_FIELDS.map((f) => (
-                <div key={f} className="space-y-1.5">
-                  <Label>{t(`column_${f}`)}</Label>
-                  <Select
-                    value={map[f] == null ? NONE : String(map[f])}
-                    onValueChange={(v) => v && setMap((m) => m && { ...m, [f]: v === NONE ? null : Number(v) })}
-                  >
-                    <SelectTrigger className="w-full" aria-label={t(`column_${f}`)}>
-                      <SelectValue>{(v: string) => (v === NONE ? t("columnNone") : header[Number(v)] || `#${Number(v) + 1}`)}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>{t("columnNone")}</SelectItem>
-                      {header.map((h, i) => <SelectItem key={i} value={String(i)}>{h || `#${i + 1}`}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2 text-sm">
+                <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="truncate font-medium" title={fileName}>{fileName || t("noFile")}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="statement-file" className="cursor-pointer text-caption font-medium text-muted-foreground hover:text-foreground">
+                  {t("changeFile")}
+                </label>
+                <input
+                  key={inputKey}
+                  id="statement-file"
+                  type="file"
+                  accept={`${IMPORT_EXTS.join(",")},text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`}
+                  onChange={(e) => void onFile(e.target.files?.[0])}
+                  className="sr-only"
+                />
+              </div>
             </div>
 
-            {map.amount != null && (
-              <div className="flex items-center justify-between gap-4">
-                <Label htmlFor="positive-expense">{t("positiveIsExpense")}</Label>
-                <Switch id="positive-expense" checked={positiveIsExpense} onCheckedChange={setPositiveIsExpense} />
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/30 px-3 py-2.5 text-center">
+              <div>
+                <div className="text-body font-semibold tabular-nums">{rows.length.toLocaleString("he-IL")}</div>
+                <div className="text-caption text-muted-foreground">{t("statsRows")}</div>
               </div>
-            )}
+              <div>
+                <div className="text-body font-semibold tabular-nums" dir="ltr">
+                  {range ? `${shortDate(range.from)}–${shortDate(range.to)}` : "—"}
+                </div>
+                <div className="text-caption text-muted-foreground">{t("statsRange")}</div>
+              </div>
+              <div>
+                <div className="text-body font-semibold tabular-nums" dir="ltr">₪{Math.round(expensesTotal).toLocaleString("he-IL")}</div>
+                <div className="text-caption text-muted-foreground">{t("statsExpenses")}</div>
+              </div>
+            </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="statement-account">{t("account")}</Label>
@@ -165,29 +245,108 @@ export function StatementImportCard() {
               <p className="text-caption text-muted-foreground">{t("accountHint")}</p>
             </div>
 
-            {rows.length > 0 && (
-              <div className="overflow-x-auto rounded-xl border">
-                <table className="w-full text-footnote">
-                  <caption className="sr-only">{t("previewCaption")}</caption>
-                  <thead className="bg-muted/40 text-muted-foreground">
-                    <tr>
-                      <th scope="col" className="px-3 py-2 text-start font-medium">{t("column_date")}</th>
-                      <th scope="col" className="px-3 py-2 text-start font-medium">{t("column_description")}</th>
-                      <th scope="col" className="px-3 py-2 text-end font-medium">{t("column_amount")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.slice(0, 10).map((r, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="whitespace-nowrap px-3 py-1.5 tabular-nums">{r.date.split("-").reverse().join("/")}</td>
-                        <td className="max-w-48 truncate px-3 py-1.5">{r.description}</td>
-                        <td className="whitespace-nowrap px-3 py-1.5 text-end tabular-nums" dir="ltr">{r.amount.toLocaleString("he-IL", { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {amountOnly && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/30 px-3 py-2">
+                <span className="text-footnote text-muted-foreground">
+                  {positiveIsExpense ? t("signCard") : t("signBank")}
+                </span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setPositiveIsExpense((v) => !v)}>
+                  {t("flip")}
+                </Button>
               </div>
             )}
+
+            {mappingIncomplete && (
+              <p className="rounded-xl bg-[color-mix(in_oklch,var(--status-over)_8%,transparent)] px-3 py-2 text-footnote" role="status">
+                {t("mappingWarning")}
+              </p>
+            )}
+
+            <div className="overflow-x-auto rounded-xl border">
+              <table className="w-full text-footnote">
+                <caption className="sr-only">{t("previewCaption")}</caption>
+                <thead className="bg-muted/40 text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-3 py-2 text-start font-medium">{t("column_date")}</th>
+                    <th scope="col" className="px-3 py-2 text-start font-medium">{t("column_description")}</th>
+                    <th scope="col" className="px-3 py-2 text-end font-medium">{t("column_amount")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, PREVIEW_ROWS).map((r, i) => (
+                    <tr key={`${r.date}-${i}`} className="border-t">
+                      <td className="whitespace-nowrap px-3 py-1.5 tabular-nums" dir="ltr">{shortDate(r.date)}</td>
+                      <td className="max-w-56 truncate px-3 py-1.5">{r.description}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-end tabular-nums" dir="ltr">{r.amount.toLocaleString("he-IL", { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  ))}
+                  {rows.length === 0 && (
+                    <tr><td colSpan={3} className="px-3 py-3 text-center text-muted-foreground">{t("noRows")}</td></tr>
+                  )}
+                </tbody>
+              </table>
+              {rows.length > PREVIEW_ROWS && (
+                <p className="border-t bg-muted/20 px-3 py-1.5 text-caption text-muted-foreground">
+                  {t("previewNote", { shown: PREVIEW_ROWS, total: rows.length })}
+                </p>
+              )}
+            </div>
+
+            <details className="rounded-xl border">
+              <summary className="cursor-pointer px-3 py-2 text-footnote font-medium text-muted-foreground">{t("advanced")}</summary>
+              <div className="space-y-3 border-t p-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {IMPORT_FIELDS.map((f) => (
+                    <div key={f} className="space-y-1.5">
+                      <Label>{t(`column_${f}`)}</Label>
+                      <Select
+                        value={map[f] == null ? NONE : String(map[f])}
+                        onValueChange={(v) => v && setMap((m) => m && { ...m, [f]: v === NONE ? null : Number(v) })}
+                      >
+                        <SelectTrigger className="w-full" aria-label={t(`column_${f}`)}>
+                          <SelectValue>{(v: string) => (v === NONE ? t("columnNone") : header[Number(v)] || `#${Number(v) + 1}`)}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NONE}>{t("columnNone")}</SelectItem>
+                          {header.map((h, i) => <SelectItem key={i} value={String(i)}>{h || `#${i + 1}`}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="header-row">{t("headerRow")}</Label>
+                    <Select value={String(headerRow)} onValueChange={(v) => v && changeHeaderRow(Number(v))}>
+                      <SelectTrigger id="header-row" className="w-full">
+                        <SelectValue>{(v: string) => t("rowOption", { n: Number(v) + 1 })}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {table.slice(0, 10).map((row, i) => (
+                          <SelectItem key={i} value={String(i)}>
+                            {t("rowOption", { n: i + 1 })}{row.find((c) => c.trim()) ? ` · ${row.find((c) => c.trim())!.slice(0, 24)}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="date-order">{t("dateOrder")}</Label>
+                    <Select value={dateOrder} onValueChange={(v) => v && setDateOrder(v as DateOrder)}>
+                      <SelectTrigger id="date-order" className="w-full">
+                        <SelectValue>{(v: string) => (v === "mdy" ? t("dateMdy") : t("dateDmy"))}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dmy">{t("dateDmy")}</SelectItem>
+                        <SelectItem value="mdy">{t("dateMdy")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            {skipped > 0 && <p className="text-footnote text-muted-foreground">{t("skipped", { count: skipped })}</p>}
 
             <p className="text-footnote text-muted-foreground" aria-live="polite">
               {tooMany ? t("tooMany", { max: MAX_IMPORT_ROWS }) : t("summary", { ready, skipped, duplicates })}
@@ -202,6 +361,8 @@ export function StatementImportCard() {
             </div>
           </>
         )}
+
+        {error && <p className="rounded-xl bg-muted/50 px-3 py-2 text-footnote" role="status">{error}</p>}
       </div>
     </SettingCard>
   );

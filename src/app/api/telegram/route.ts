@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { clearBot, getBotConfig, getHideAmounts, saveBot, setHideAmounts } from "@/server/bot/config";
 import { restartBot } from "@/server/bot";
+import { demoBlockedResponse } from "@/server/demo/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // Verifying a bot calls api.telegram.org; the demo keeps every key and message local.
+  const blocked = demoBlockedResponse();
+  if (blocked) return blocked;
+
   const { token } = (await request.json().catch(() => ({}))) as { token?: unknown };
   if (typeof token !== "string" || !/^\d+:[\w-]{30,}$/.test(token.trim())) {
     return NextResponse.json({ error: "invalid_token" }, { status: 400 });

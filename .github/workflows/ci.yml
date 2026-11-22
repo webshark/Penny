@@ -24,3 +24,39 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "1"
+      - run: npx next typegen
+      # A broken build used to merge: the release job was the first place it ran.
+      - run: npx next build
+        env:
+          PENNY_DATA_DIR: .build-data
+          PENNY_UPDATE_CHECK: "0"
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "1"
+      - run: npx playwright install --with-deps chromium
+      # playwright.config.ts builds and serves a production app on isolated e2e/.data.
+      - run: npm run e2e
+        env:
+          CI: "1"
+          PENNY_UPDATE_CHECK: "0"

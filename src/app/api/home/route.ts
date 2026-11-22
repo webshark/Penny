@@ -15,6 +15,8 @@ import {
 import { getWorkspaceSetting } from "@/server/db/queries/settings";
 import { getNextRunAt } from "@/server/sync/scheduler";
 import { getWorkspaceIdFromRequest } from "@/server/lib/workspace-context";
+import { ownerScopeFromParam } from "@/server/lib/account-owners";
+import { runWithOwner } from "@/server/lib/owner-scope";
 import {
   daysInMonth,
   dayWithinMonth,
@@ -22,7 +24,8 @@ import {
   nextPayday,
   pacePhrase,
 } from "@/server/lib/pace";
-import { toLocalISODate } from "@/server/lib/date-utils";
+import { israelToday, toLocalISODate } from "@/server/lib/date-utils";
+import { homeMonthDate } from "@/lib/home-month";
 import type {
   HomeBankHealthItem,
   HomeCashFlow,
@@ -60,10 +63,19 @@ function safe<T>(
   }
 }
 
+/** ?owner= scopes the dashboard's spend and cash figures to one household member. */
 export async function GET(request: Request) {
+  const scope = ownerScopeFromParam(getWorkspaceIdFromRequest(request), new URL(request.url).searchParams.get("owner"));
+  return runWithOwner(scope, () => home(request));
+}
+
+async function home(request: Request) {
   const workspaceId = getWorkspaceIdFromRequest(request);
 
-  const now = new Date();
+  // Israel's calendar day as a local date, so the month is right on a host in another time zone (Docker runs UTC).
+  const [ty, tm, td] = israelToday().split("-").map(Number);
+  const today = new Date(ty, tm - 1, td, 12);
+  const now = homeMonthDate(new URL(request.url).searchParams.get("month"), today);
   const year = now.getFullYear();
   const month = now.getMonth();
 

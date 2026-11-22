@@ -171,14 +171,20 @@ function Goals({ goals }: { goals: Goal[] }) {
         <ul className="mb-5 grid gap-4 sm:grid-cols-2">
           {goals.map((g) => {
             const pct = Math.min(100, (g.savedAmount / g.targetAmount) * 100);
-            const monthly = goalMonthly(g.targetAmount, g.savedAmount, g.targetDate, today);
-            const due = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(`${g.targetDate}-15T12:00:00`));
+            // Stored as YYYY-MM, but an older row or an import can carry a full date; only the month matters here.
+            const month = g.targetDate.slice(0, 7);
+            const monthly = goalMonthly(g.targetAmount, g.savedAmount, month, today);
+            const due = /^\d{4}-\d{2}$/.test(month)
+              ? new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(`${month}-15T12:00:00`))
+              : null;
             return (
               <li key={g.id} className="rounded-2xl bg-muted/60 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-footnote font-semibold">{g.name}</p>
-                    <p className="text-caption text-muted-foreground">{t("goalDue", { date: due, target: shekels(g.targetAmount, locale) })}</p>
+                    <p className="text-caption text-muted-foreground">
+                      {due ? t("goalDue", { date: due, target: shekels(g.targetAmount, locale) }) : shekels(g.targetAmount, locale)}
+                    </p>
                   </div>
                   <Button variant="ghost" size="icon" aria-label={t("removeGoal", { name: g.name })} onClick={() => remove.mutate(g as Goal & Record<string, unknown>)}>
                     <Trash2 className="size-4" aria-hidden />
@@ -368,7 +374,7 @@ function Insurance({ policies, monthlyExpenses }: { policies: InsurancePolicy[];
         <div className="space-y-1.5">
           <Label>{t("policyKind")}</Label>
           <Select value={draft.kind} onValueChange={(v) => v && setDraft({ ...draft, kind: v as InsurancePolicy["kind"] })}>
-            <SelectTrigger className="w-full"><SelectValue>{(v: string) => t(`policy_${v}`)}</SelectValue></SelectTrigger>
+            <SelectTrigger aria-label={t("policyKind")} className="w-full"><SelectValue>{(v: string) => t(`policy_${v}`)}</SelectValue></SelectTrigger>
             <SelectContent>
               {POLICY_KINDS.map((k) => <SelectItem key={k} value={k}>{t(`policy_${k}`)}</SelectItem>)}
             </SelectContent>

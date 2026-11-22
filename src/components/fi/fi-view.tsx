@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { getFi } from "@/lib/api";
 import { fmt, shekels } from "@/lib/money";
 import { useGentle } from "@/hooks/use-gentle";
-import { carCost, coastCheck, fiBridge, fiNumber, fiOdds, yearsBySavingsRate, yearsToTarget, yearsToTargetWithEvents, type CarInputs } from "@/lib/fi";
+import { carCost, coastCheck, fireVariants, fiBridge, fiNumber, fiOdds, yearsBySavingsRate, yearsToTarget, yearsToTargetWithEvents, type CarInputs } from "@/lib/fi";
 import { amendment190, bracketTax, brokerOutcome, fundSwitch, gemelVsBroker, moneyMarket, payoffVsInvest, rentalYield, rentVsBuy } from "@/lib/tools";
 import { projectBalance } from "@/lib/plan";
 import { IL } from "@/lib/il-defaults";
@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { FiPayload } from "@/lib/types";
 import { FiExtras, PlanSettingsButton } from "./fi-extras";
+import { LifetimeCard } from "./lifetime-card";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const TABS = ["fi", "safety", "tools"] as const;
@@ -188,7 +189,7 @@ function Body({ data }: { data: FiPayload }) {
           </div>
         </div>
         <dl className="mt-8 grid grid-cols-3 gap-4 sm:gap-6">
-          <Stat label={t("savingsRate")} value={savingsRate == null ? "—" : `${Math.round(savingsRate * 100)}%`} />
+          <Stat label={t("savingsRate")} value={savingsRate == null ? "—" : `${Math.round(savingsRate * 100)}%`} ltr />
           <Stat label={t("yearsOfLiving")} value={spend > 0 ? fmt(savings / (spend * 12), locale, 1) : "—"} hint={t("yearsOfLivingHint")} />
           <Stat label={t("safeWithdrawal")} value={shekels((savings * plan.rate) / 12, locale)} hint={t("safeWithdrawalHint")} />
         </dl>
@@ -212,6 +213,7 @@ function Body({ data }: { data: FiPayload }) {
       </CardShell>
 
       <LifeEvents events={events} plainYears={plainYears} years={years} onSave={(e) => update({ events: e })} />
+      <FireVariants spend={spend} savings={savings} monthlySaving={monthlySaving} annualReturn={annualReturn} rate={plan.rate} yearsToRetirement={age != null ? Math.max(0, saved.retirementAge - age) : null} />
       <FiExtras data={data} tab="fi" />
       {!simple && (
         <div className="grid gap-4 lg:col-span-3 lg:grid-cols-2">
@@ -231,6 +233,7 @@ function Body({ data }: { data: FiPayload }) {
         <Segmented<Tab> label={t("tabsLabel")} value={tab} onChange={setTab} options={TABS.map((k) => ({ value: k, label: t(`tab_${k}`) }))} />
         <PlanSettingsButton />
       </div>
+      <LifetimeCard data={data} />
       <div className="grid items-start gap-4 lg:grid-cols-3">
         {tab === "fi" && fiTab}
         {tab === "safety" && <FiExtras data={data} tab="safety" />}
@@ -247,11 +250,11 @@ function Body({ data }: { data: FiPayload }) {
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Stat({ label, value, hint, ltr }: { label: string; value: string; hint?: string; /** Percentages and figures keep their own direction inside Hebrew. */ ltr?: boolean }) {
   return (
     <div title={hint} className="flex flex-col">
       <dt className="text-caption text-pretty text-muted-foreground">{label}</dt>
-      <dd className="figure mt-auto pt-1 text-[1.75rem] leading-tight">{value}</dd>
+      <dd className="figure mt-auto pt-1 text-[1.75rem] leading-tight">{ltr ? <bdi dir="ltr">{value}</bdi> : value}</dd>
     </div>
   );
 }
@@ -354,7 +357,7 @@ function Bridge({ age, years, spend, income, savings, annualReturn, rate }: { ag
             <tbody>
               {table.map((r) => (
                 <tr key={r.rate} className={cn(r === closest && "font-semibold text-primary")} aria-current={r === closest || undefined}>
-                  <td className="py-0.5">{Math.round(r.rate * 100)}%</td>
+                  <td className="py-0.5"><bdi dir="ltr">{Math.round(r.rate * 100)}%</bdi></td>
                   <td className="py-0.5 text-end">{r.years == null ? t("never") : r.years === 0 ? t("already") : t("years", { years: fmt(r.years, locale, 1) })}</td>
                 </tr>
               ))}
@@ -715,5 +718,40 @@ function Amendment190() {
       </div>
       <p className="mt-4 text-caption text-pretty text-muted-foreground">{t("disclaimer", { min: shekels(IL.amendment190.minQualifyingPension, locale), year: IL.year })}</p>
     </>
+  );
+}
+/** FIRE variants as cards: lean, today's life, fat, and coast. */
+function FireVariants({ spend, savings, monthlySaving, annualReturn, rate, yearsToRetirement }: { spend: number; savings: number; monthlySaving: number; annualReturn: number; rate: number; yearsToRetirement: number | null }) {
+  const t = useTranslations("fi");
+  const locale = useLocale();
+  const v = fireVariants({ monthlySpend: spend, savings, monthlySaving, annualReturn, withdrawalRate: rate, yearsToRetirement });
+  const money = (n: number) => shekels(Math.round(n), locale);
+  const when = (y: number | null) => (y == null ? t("variantNever") : y === 0 ? t("variantReached") : t("variantIn", { years: Math.round(y * 10) / 10 }));
+  const cards = [
+    { key: "lean", ...v.lean, hint: t("variantLeanHint") },
+    { key: "regular", ...v.regular, hint: t("variantRegularHint") },
+    { key: "fat", ...v.fat, hint: t("variantFatHint") },
+  ];
+  return (
+    <CardShell label={t("variantsTitle")} className="lg:col-span-3">
+      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((c) => (
+          <li key={c.key} className={`rounded-xl border p-4 ${c.key === "regular" ? "border-primary bg-primary/5" : "border-border"}`}>
+            <p className="text-xs font-semibold text-muted-foreground">{t(`variant_${c.key}`)}</p>
+            <bdi data-money className="mt-1 block text-xl font-semibold tabular-nums">{Number.isFinite(c.target) ? money(c.target) : "—"}</bdi>
+            <p className="mt-1 text-xs text-muted-foreground">{c.hint}</p>
+            <p className="mt-2 text-sm font-medium">{when(c.years)}</p>
+          </li>
+        ))}
+        <li className="rounded-xl border border-border p-4">
+          <p className="text-xs font-semibold text-muted-foreground">{t("variant_coast")}</p>
+          {v.coast ? <>
+            <bdi data-money className="mt-1 block text-xl font-semibold tabular-nums">{money(v.coast.coastNumber)}</bdi>
+            <p className="mt-1 text-xs text-muted-foreground">{t("variantCoastHint")}</p>
+            <p className={`mt-2 text-sm font-medium ${v.coast.canStop ? "text-status-on-track" : ""}`}>{v.coast.canStop ? t("variantCoastDone") : t("variantCoastLeft", { amount: money(v.coast.coastNumber - savings) })}</p>
+          </> : <p className="mt-2 text-sm text-muted-foreground">{t("variantCoastNeedsAge")}</p>}
+        </li>
+      </ul>
+    </CardShell>
   );
 }

@@ -26,12 +26,16 @@ export interface ProjectedPayment {
   total: number;
 }
 
-/** Future payments of each installment plan, from its latest seen payment. Plans are keyed by account, merchant, amount and total. */
+/**
+ * Future payments of each installment plan, from its latest seen payment. Plans are keyed by account, merchant, total
+ * and the month of their first payment (billing month minus the payments before it), which every payment of a plan
+ * shares; not by amount, since issuers often bill the first payment an agora or two apart (333.34, 333.33).
+ */
 export function projectInstallments(txns: InstallmentTxn[], today: string): ProjectedPayment[] {
   const latest = new Map<string, InstallmentTxn>();
   for (const t of txns) {
     if (!(t.amount !== 0) || t.number < 1 || t.number > t.total) continue;
-    const key = [t.account, t.merchant, Math.abs(t.amount), t.total].join("|");
+    const key = [t.account, t.merchant, t.total, addMonths(t.date, -(t.number - 1)).slice(0, 7)].join("|");
     const prev = latest.get(key);
     if (!prev || t.number > prev.number) latest.set(key, t);
   }

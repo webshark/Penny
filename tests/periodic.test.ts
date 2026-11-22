@@ -41,6 +41,15 @@ describe("detectPeriodic", () => {
     expect(by["yearly:Costco"]).toMatchObject({ amount: 220, nextDue: "2027-01" });
     expect(detectPeriodic(charges, [], today, new Set(["kw:arnona"])).some((x) => x.autoKey === "kw:arnona")).toBe(false);
   });
+  it("puts the two-monthly utilities aside too", () => {
+    const charges = ["2026-05-10", "2026-07-10", "2026-09-10"].flatMap((date) => [
+      { description: "חברת החשמל לישראל", amount: 640, date, category: null },
+      { description: "מי אביבים 2010", amount: 210, date, category: null },
+    ]);
+    const by = Object.fromEntries(detectPeriodic(charges, [], today, new Set()).map((x) => [x.autoKey, x]));
+    expect(by["kw:electricity"]).toMatchObject({ amount: 640, everyMonths: 2 });
+    expect(by["kw:water"]).toMatchObject({ amount: 210, everyMonths: 2 });
+  });
   it("ignores monthly bills and detects a holiday spike", () => {
     const charges = Array.from({ length: 12 }, (_, i) => {
       const m = String(i + 1).padStart(2, "0");

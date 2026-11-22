@@ -46,7 +46,7 @@ export function TagChips({ id, tags, allTags, onFilter, className, addClassName 
           <button type="button" className="rounded-full focus-visible:outline-2 focus-visible:outline-ring" onClick={() => onFilter(tag)} aria-label={t("filterBy", { tag })}>
             #{tag}
           </button>
-          <button type="button" className="rounded-full hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" onClick={() => void save(tags.filter((x) => x !== tag), tags)} aria-label={t("remove", { tag })}>
+          <button type="button" className="-m-1.5 grid size-6 place-items-center rounded-full hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" onClick={() => void save(tags.filter((x) => x !== tag), tags)} aria-label={t("remove", { tag })}>
             <X className="size-3" aria-hidden />
           </button>
         </span>

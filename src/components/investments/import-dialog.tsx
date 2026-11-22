@@ -137,7 +137,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                       value={map[f] == null ? NONE : String(map[f])}
                       onValueChange={(v) => v && setMap((m) => ({ ...m, [f]: v === NONE ? null : Number(v) }))}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger aria-label={t(`column_${f}`)} className="w-full">
                         <SelectValue>{(v: string) => (v === NONE ? t("columnNone") : header[Number(v)])}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
@@ -151,7 +151,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               <div className="space-y-1.5">
                 <Label>{t("importType")}</Label>
                 <Select value={type} onValueChange={(v) => v && setType(v as AssetType)}>
-                  <SelectTrigger className="w-full"><SelectValue>{(v: string) => t(`type_${v}`)}</SelectValue></SelectTrigger>
+                  <SelectTrigger aria-label={t("importType")} className="w-full"><SelectValue>{(v: string) => t(`type_${v}`)}</SelectValue></SelectTrigger>
                   <SelectContent>
                     {ASSET_TYPES.map((v) => <SelectItem key={v} value={v}>{t(`type_${v}`)}</SelectItem>)}
                   </SelectContent>
@@ -165,8 +165,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <DialogFooter>
-          <IconButton label={tc("cancel")} variant="outline" onClick={onClose}><X className="size-4" aria-hidden /></IconButton>
-          <IconButton label={mutation.isPending ? t("saving") : t("importButton", { count: assets.length })} variant="default" disabled={assets.length === 0 || mutation.isPending} onClick={() => mutation.mutate()}>
+          <IconButton showLabel label={tc("cancel")} variant="outline" onClick={onClose}><X className="size-4" aria-hidden /></IconButton>
+          <IconButton showLabel label={mutation.isPending ? t("saving") : t("importButton", { count: assets.length })} variant="default" disabled={assets.length === 0 || mutation.isPending} onClick={() => mutation.mutate()}>
             <FileUp className="size-4" aria-hidden />
           </IconButton>
         </DialogFooter>

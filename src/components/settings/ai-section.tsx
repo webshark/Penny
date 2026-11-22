@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, CircleCheck } from "lucide-react";
+import { Check, CircleCheck, Sparkles } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
@@ -102,7 +102,7 @@ export function AISection() {
   };
 
   return (
-    <SectionShell title={t("title")} description={t("description")}>
+    <SectionShell title={t("title")} description={t("description")} icon={<Sparkles aria-hidden />}>
       <section aria-labelledby="ai-providers">
       <h3 id="ai-providers" className="mb-2 px-4 text-sm font-semibold text-muted-foreground">{t("providersListLabel")}</h3>
       <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl bg-card">
@@ -252,7 +252,7 @@ function ProviderSheet({
             <div className="space-y-2">
               <Label>{t("modelLabel")}</Label>
               <Select value={ollamaModel} onValueChange={(v) => v && setOllamaModel(v)}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("modelLabel")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

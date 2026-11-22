@@ -1,0 +1,17 @@
+# Weekly dependency updates. Bank scrapers change often when banks change their sites, so they get their own group
+# and land first; everything else is grouped so the weekly PRs stay few.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly, day: sunday, time: "06:00", timezone: Asia/Jerusalem }
+    open-pull-requests-limit: 5
+    groups:
+      bank-scrapers:
+        patterns: ["israeli-bank-scrapers", "@sergienko4/israeli-bank-scrapers", "israeli-pension-scrapers"]
+      minor-and-patch:
+        update-types: [minor, patch]
+        exclude-patterns: ["israeli-bank-scrapers", "@sergienko4/israeli-bank-scrapers", "israeli-pension-scrapers"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

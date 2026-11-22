@@ -3,7 +3,13 @@ import "server-only";
 import fs from "fs";
 import path from "path";
 import { getGlobalSetting, setGlobalSetting } from "@/server/db/queries/settings";
-import { getAccountNumbers, insertFileImport, storedForImport } from "@/server/db/queries/transactions";
+import {
+  countBatchCategories,
+  flagBatchForReview,
+  getAccountNumbers,
+  insertFileImport,
+  storedForImport,
+} from "@/server/db/queries/transactions";
 import { applyMerchantRulesToSyncRun } from "@/server/db/queries/excluded-merchants";
 import { applyRulesToSyncRun } from "@/server/db/queries/rules";
 import { isKeyLocked } from "@/server/lib/encryption";
@@ -13,16 +19,34 @@ import { getDb } from "@/server/db";
 import { IMPORT_EXTS, markDuplicates, MAX_IMPORT_ROWS, statementRows, type ImportRow } from "@/lib/file-import";
 
 /** Dedupe against stored rows, insert, then the same merchant memory and rules a bank sync gets. Shared by /api/import and the folder scan. */
-export function saveStatementImport(workspaceId: number, account: string, rows: ImportRow[], dryRun = false) {
+export function saveStatementImport(
+  workspaceId: number,
+  account: string,
+  rows: ImportRow[],
+  dryRun = false,
+  source: "bank" | "card" = "bank",
+) {
   const dates = rows.map((r) => r.date).sort();
   const marked = markDuplicates(rows, storedForImport(workspaceId, account, dates[0], dates[dates.length - 1]));
   const fresh = marked.filter((r) => !r.duplicate);
   const duplicates = marked.length - fresh.length;
-  if (dryRun || fresh.length === 0) return { ready: fresh.length, duplicates, added: 0, batchId: null as number | null };
-  const { batchId, added } = insertFileImport(workspaceId, account, fresh);
+  if (dryRun || fresh.length === 0) {
+    return { ready: fresh.length, duplicates, added: 0, batchId: null as number | null, categorized: 0, needsReview: 0 };
+  }
+  const { batchId, added } = insertFileImport(workspaceId, account, fresh, source);
   applyMerchantRulesToSyncRun(workspaceId, batchId);
   applyRulesToSyncRun(workspaceId, batchId);
-  return { ready: fresh.length, duplicates: duplicates + fresh.length - added, added, batchId: batchId as number | null };
+  // Whatever the rules did not cover waits in the review queue instead of sitting invisible.
+  const needsReview = flagBatchForReview(workspaceId, batchId);
+  const { categorized } = countBatchCategories(workspaceId, batchId);
+  return {
+    ready: fresh.length,
+    duplicates: duplicates + fresh.length - added,
+    added,
+    batchId: batchId as number | null,
+    categorized,
+    needsReview,
+  };
 }
 
 // ---- pure file handling (tested) ----
@@ -175,10 +199,10 @@ export async function scanImportFolder(now = false): Promise<FolderImportConfig>
         const label = prefix + name;
         const at = new Date().toISOString();
         try {
-          const { rows } = await statementRows(new Uint8Array(fs.readFileSync(path.join(folder, name))), name);
+          const { rows, source } = await statementRows(new Uint8Array(fs.readFileSync(path.join(folder, name))), name);
           if (rows.length === 0) throw new Error("noRows");
           if (rows.length > MAX_IMPORT_ROWS) throw new Error("tooMany");
-          const r = saveStatementImport(workspaceId, account, rows);
+          const r = saveStatementImport(workspaceId, account, rows, false, source);
           moveInto(folder, name, "imported");
           c.history.unshift({ at, file: label, added: r.added, duplicates: r.duplicates, error: null });
           if (r.added > 0) {

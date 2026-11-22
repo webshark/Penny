@@ -45,6 +45,7 @@ export interface AvatarInput {
   avatarEmoji?: string | null;
   avatarColor?: string | null;
   avatarPet?: ProfilePip | null;
+  avatarPhoto?: string | null;
 }
 
 /** Picks avatar fields out of a request body. Absent = untouched, null/"" = cleared. */
@@ -69,5 +70,14 @@ export function parseAvatar(body: unknown): AvatarInput | { error: string } {
     if (v === null) out.avatarPet = null;
     else if ((out.avatarPet = parsePip(v)) == null) return { error: "avatarPet must be an object" };
   }
+  if ("avatarPhoto" in b) {
+    const v = b.avatarPhoto;
+    // A small picture the browser already squared and shrank; anything else (another type, a huge file) is refused.
+    if (v === null || v === "") out.avatarPhoto = null;
+    else if (typeof v === "string" && v.length <= MAX_PHOTO && /^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(v)) out.avatarPhoto = v;
+    else return { error: "avatarPhoto must be a JPEG, PNG or WebP data URL under 300 KB" };
+  }
   return out;
 }
+
+const MAX_PHOTO = 300_000;

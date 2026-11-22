@@ -74,7 +74,7 @@ export function JourneyView() {
   }
 
   const goals = (
-    <div className="space-y-4 md:space-y-6">
+    <div className="min-w-0 space-y-4 md:space-y-6">
       <CustomGoals />
       <VacationPlans />
     </div>

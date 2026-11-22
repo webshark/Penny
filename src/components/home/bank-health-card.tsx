@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { shekels } from "@/lib/money";
 import { CardShell, CardAction } from "./card-shell";
 import { formatLastSync } from "@/lib/formatters";
 import { translateProviderName, useFormatterLabels } from "@/lib/i18n-data";
@@ -37,7 +38,7 @@ export function BankHealthCard({ items }: Props) {
       >
         <ul className="flex flex-1 flex-col gap-3">
           {items.map((item) => (
-            <li key={item.provider}>
+            <li key={item.id}>
               <Row item={item} />
             </li>
           ))}
@@ -52,22 +53,24 @@ function Row({ item }: { item: HomeBankHealthItem }) {
   const tBanks = useTranslations("banks");
   const labels = useFormatterLabels();
   const { providerName, lastSyncAt, status, errorMessage, provider } = item;
-  const displayName = translateProviderName(provider, providerName, tBanks);
+  const displayName = translateProviderName(provider, providerName, tBanks) + (item.label ? ` · ${item.label}` : "");
   const errorText = useSyncErrorText();
+  const locale = useLocale();
 
   return (
     <Link
       href="/settings/bank"
       className="flex items-center justify-between rounded-xl px-2 py-1.5 transition-colors hover:bg-accent/40"
-      title={errorMessage ? errorText(errorMessage).message : undefined}
     >
       <div className="flex min-w-0 items-center gap-2.5">
         <StatusDot status={status} />
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{displayName}</div>
+          <div className="truncate text-sm font-medium" title={displayName}>{displayName}</div>
           <div className="text-xs text-muted-foreground">
             {describeLastSync(lastSyncAt, status, labels, t)}
           </div>
+          {status === "error" && errorMessage && <div className="text-xs text-pretty text-[var(--status-over)]">{errorText(errorMessage).message}</div>}
+          {item.drift != null && <div className="text-xs text-[var(--status-heads-up)]">{t("balanceGap", { amount: shekels(Math.abs(item.drift), locale) })}</div>}
         </div>
       </div>
       <StatusLabel status={status} />

@@ -9,9 +9,9 @@ import { getDb } from "@/server/db";
 import { parseTrip, tripTotal } from "@/lib/trip";
 
 // Pure view prefs: each profile keeps its own; the household plan's values are the default until it picks.
-const VIEW = ["simpleMode", "wheelPaging", "homeStyle"] as const;
+const VIEW = ["simpleMode", "razeMode", "wheelPaging", "homeStyle"] as const;
 type View = Pick<FinancialPlan, (typeof VIEW)[number]>;
-const viewOf = (p: FinancialPlan): View => ({ simpleMode: p.simpleMode, wheelPaging: p.wheelPaging, homeStyle: p.homeStyle });
+const viewOf = (p: FinancialPlan): View => ({ simpleMode: p.simpleMode, razeMode: p.razeMode, wheelPaging: p.wheelPaging, homeStyle: p.homeStyle });
 function profileView(request: Request, ws: number): { key: string; view: Partial<View> } | null {
   const p = profileFromRequest(request, ws);
   if (!p) return null;

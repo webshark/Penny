@@ -1,8 +1,5 @@
-import { redirect } from "next/navigation";
-
-
-export const dynamic = "force-dynamic";
+import { SettingsIndex } from "@/components/settings/settings-sidebar";
 
 export default function SettingsRoot() {
-  redirect("/settings/general");
+  return <SettingsIndex />;
 }

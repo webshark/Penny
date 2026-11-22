@@ -2,7 +2,7 @@ import type { CategoryWithData } from "./types";
 
 export type StudioPreferences = {
   customColor: string | null;
-  theme: "pearl" | "midnight" | "glass" | "system";
+  theme: "pearl" | "midnight" | "system";
   accent: "violet" | "ocean" | "jade" | "rose";
   chart: "bars" | "donut" | "table";
   metric: "remaining" | "spent";
@@ -27,7 +27,7 @@ export function parseStudioPreferences(raw: string | null): StudioPreferences {
     const source = value as Record<string, unknown>;
     const result = { ...DEFAULT_STUDIO };
     const enums = {
-      theme: ["pearl", "midnight", "glass", "system"], accent: ["violet", "ocean", "jade", "rose"],
+      theme: ["pearl", "midnight", "system"],
       chart: ["bars", "donut", "table"], metric: ["remaining", "spent"],
       density: ["comfortable", "compact"], layout: ["balanced", "stacked"],
     } as const;
@@ -39,7 +39,8 @@ export function parseStudioPreferences(raw: string | null): StudioPreferences {
     for (const key of ["showChart", "showJourney", "motion"] as const) {
       if (typeof source[key] === "boolean") result[key] = source[key];
     }
-    if (typeof source.customColor === "string" && /^#[0-9a-f]{6}$/i.test(source.customColor)) result.customColor = source.customColor;
+    // The see-through look was retired: it now opens as light. Accent and custom colour are no longer choices.
+    if (source.theme === "glass") result.theme = "pearl";
     return result;
   } catch { return { ...DEFAULT_STUDIO }; }
 }

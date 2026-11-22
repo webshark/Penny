@@ -2,8 +2,8 @@ import "server-only";
 
 import { getDb } from "../db/index";
 import { normalizeMerchant } from "../rules/normalize";
-import { addDays, israelDay, monthKey } from "../lib/date-utils";
-import { isBankProvider } from "../lib/transfers";
+import { addDays, daysBetween, israelDay, monthKey } from "../lib/date-utils";
+import { isCardProvider } from "../lib/card-providers";
 import { usesScraperFork } from "../scrapers/select";
 import { detectRecurring, isActive, type Series } from "./recurring";
 import { projectInstallments, type ProjectedPayment } from "./installments";
@@ -13,6 +13,8 @@ import { upcomingBillingDates, type CardForecastInput } from "./forecast";
 interface Row {
   description: string;
   amount: number;
+  /** The household's own part of the amount, after any business share. */
+  personal: number;
   currency: string;
   date: string;
   billingDate: string;
@@ -26,7 +28,7 @@ interface Row {
 function loadRows(workspaceId: number): Row[] {
   return getDb()
     .prepare(
-      `SELECT t.description, t.charged_amount as amount,
+      `SELECT t.description, t.charged_amount as amount, t.personal_amount as personal,
               COALESCE(t.charged_currency, t.original_currency) as currency,
               t.date as date, t.processed_date as billingDate,
               t.account_number as account, t.installment_number as num, t.installment_total as total,
@@ -35,8 +37,8 @@ function loadRows(workspaceId: number): Row[] {
        WHERE t.workspace_id = ? AND t.status = 'completed' AND t.kind = 'expense' AND t.is_excluded = 0`
     )
     .all(workspaceId)
-    // Stored dates are whatever the scraper returned (often UTC instants); bucket them by Israeli calendar day here
-    // rather than rewriting them on insert, which would change dedup hashes of rows already stored.
+    // Synced dates are stored as Israeli days (migration 073); israelDay is a no-op on those and still converts any
+    // instant-style date from an older import path.
     .map((r) => {
       const row = r as Row;
       return { ...row, date: israelDay(row.date), billingDate: israelDay(row.billingDate) };
@@ -54,7 +56,7 @@ function loadPendingByAccount(workspaceId: number): Map<string, number> {
     .all(workspaceId) as { account: string; amount: number; provider: string }[];
   const byAccount = new Map<string, number>();
   for (const r of rows) {
-    if (isBankProvider(r.provider)) continue;
+    if (!isCardProvider(r.provider)) continue;
     // The fork reports pending charges unsigned; the default library signs them like completed rows (refunds positive).
     const charge = usesScraperFork(r.provider) ? Math.abs(r.amount) : -r.amount;
     byAccount.set(r.account, (byAccount.get(r.account) ?? 0) + charge);
@@ -98,7 +100,12 @@ export function loadInsights(workspaceId: number, today: string, fallbackBilling
     norm
       .filter((r) => !(r.total != null && r.total > 1))
       .map((r) => ({ merchant: r.merchant, account: r.account, currency: r.currency, amount: r.amount, date: r.date }))
-  ).filter((s) => isActive(s, today));
+  ).filter((s) => isActive(s, today))
+    // Each subscription's own charge-to-bill lag, from its latest charge: the card's statement closes before billing day.
+    .map((s) => {
+      const last = norm.find((r) => r.account === s.account && r.merchant === s.merchant && r.date === s.lastDate && r.billingDate > r.date);
+      return last ? { ...s, billingLagDays: daysBetween(last.date, last.billingDate) } : s;
+    });
 
   const installments = projectInstallments(
     norm
@@ -118,7 +125,8 @@ export function loadInsights(workspaceId: number, today: string, fallbackBilling
     today
   );
 
-  const spent = (r: Row) => Math.max(0, -r.amount);
+  // Net of refunds, the same rule as v_spend_rows: a refund is negative spending, not income.
+  const spent = (r: Row) => -r.personal;
   const thisMonth = monthKey(today, 0);
   const nextMonth = monthKey(today, 1);
   const prior = [-1, -2, -3].map((s) => monthKey(today, s));
@@ -137,7 +145,7 @@ export function loadInsights(workspaceId: number, today: string, fallbackBilling
 
   const pending = loadPendingByAccount(workspaceId);
   // Only cards have bills; bank-account debits are spending but not part of a card forecast.
-  const cardRows = rows.filter((r) => !isBankProvider(r.provider));
+  const cardRows = rows.filter((r) => isCardProvider(r.provider));
   const accounts = [...new Set([...cardRows.map((r) => r.account), ...pending.keys()])].sort();
   const cards: CardForecastInput[] = accounts.map((account) => {
     const own = cardRows.filter((r) => r.account === account);
@@ -161,11 +169,14 @@ export function loadInsights(workspaceId: number, today: string, fallbackBilling
     const nextInstallments = installments
       .filter((p) => p.account === account && p.month === nextMonth)
       .reduce((sum, p) => sum + p.amount, 0);
+    // Median days from charge to bill over this card's single-payment charges: how late a new charge gets billed.
+    const lags = own.filter((r) => !(r.total != null && r.total > 1) && r.billingDate > r.date).map((r) => daysBetween(r.date, r.billingDate)).sort((a, b) => a - b);
     return {
       account,
       billingDay,
       posted,
       avgDiscretionary: Math.max(0, priorMean - recurring - nextInstallments),
+      lagDays: lags.length ? lags[Math.floor(lags.length / 2)] : undefined,
     };
   });
 

@@ -56,6 +56,10 @@ export interface YearlySeries {
 // Israeli bills that come a few times a year. `name` is the default item name the user can edit.
 const KEYWORDS: { key: string; name: string; re: RegExp; month?: number }[] = [
   { key: "arnona", name: "ארנונה", re: /ארנונה/ },
+  // Billed every two months by most providers, so worth putting aside for monthly.
+  { key: "electricity", name: "חשמל", re: /חברת החשמל|חשמל לישראל|israel electric/i },
+  { key: "water", name: "מים", re: /(^|[^א-ת])(מי אביבים|מי שבע|מי כרמל|מי רעננה|מי נתניה|הגיחון|תאגיד (ה)?מים|מניב ראשון|מי עירון)(?![א-ת])/ },
+  { key: "gas", name: "גז", re: /סופרגז|פזגז|אמישראגז|דורגז/ },
   { key: "car-insurance", name: "ביטוח רכב", re: /ביטוח\s*(רכב|חובה|מקיף)|הראל רכב|ביטוח ישיר רכב/ },
   { key: "car-license", name: "טסט ורישוי רכב", re: /טסט|רישוי|משרד התחבורה|אגרת רכב/ },
   { key: "home-insurance", name: "ביטוח דירה", re: /ביטוח\s*(דירה|מבנה|תכולה)/ },

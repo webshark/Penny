@@ -4,8 +4,13 @@ import { encrypt } from "@/server/lib/encryption";
 import { normalizeOllamaUrl, OLLAMA_URL_ERROR } from "@/lib/url-guard";
 import { CLI_AGENTS } from "@/server/ai/cli-agent";
 import type { AppSettings } from "@/lib/types";
+import { demoBlockedResponse } from "@/server/demo/guard";
 
 export async function POST(request: Request) {
+  // No AI provider in the demo: the first call would otherwise reach a model host.
+  const blocked = demoBlockedResponse();
+  if (blocked) return blocked;
+
   const body = ((await request.json().catch(() => null)) ?? {}) as {
     provider: AppSettings["aiProvider"];
     apiKey?: string;

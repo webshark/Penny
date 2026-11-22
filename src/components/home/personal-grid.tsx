@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {loadPreference,storePreference} from "@/lib/preference-sync";
 import {useActiveProfileId} from "@/lib/workspace-store";
@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { parseLayout, presetLayout, type Tile, type WidgetId, type LayoutPreset } from "@/lib/personal-layout";
 
-const labels: Record<WidgetId, [string, string]> = { thisMonth: ["החודש שלי", "This month"], bills: ["חיובים קרובים", "Upcoming bills"], goals: ["היעד שלי", "My goal"], planner: ["מה יקרה אם…", "What if…"], needsAttention: ["לטיפול", "To review"], cashFlow: ["תזרים", "Cash flow"], historicalTrend: ["מגמות", "Trends"], categories: ["קטגוריות", "Categories"], recentTransactions: ["תנועות אחרונות", "Recent activity"], topMerchants: ["בתי עסק", "Merchants"], bankHealth: ["מקורות ועדכון", "Sources & freshness"] };
 type Saved = { name: string; tiles: Tile[] };
 
 const noSubscribe = () => () => {}; // read once per render; this component's own writes go through state
@@ -21,8 +20,8 @@ function readLayout(raw: string | null | false | undefined): { tiles: Tile[]; sa
   catch { return { tiles: presetLayout("daily"), saved: [] }; }
 }
 
-export function PersonalGrid({ render }: { render: (id: WidgetId) => ReactNode }) {
-  const he = useLocale() === "he";
+/** `exclude` drops cards another part of the page already shows, so nothing appears twice. */
+export function PersonalGrid({ render, exclude = [] }: { render: (id: WidgetId) => ReactNode; exclude?: WidgetId[] }) {
   const t = useTranslations("homeGrid");
   const mobile = useIsMobile();
   const profileId=useActiveProfileId(); // per profile: each person keeps their own look
@@ -32,7 +31,8 @@ export function PersonalGrid({ render }: { render: (id: WidgetId) => ReactNode }
   const raw = useSyncExternalStore(noSubscribe, () => { try { return localStorage.getItem(key); } catch { return false; } }, () => undefined);
   const stored = useMemo(() => readLayout(raw), [raw]);
   const [own, setOwn] = useState<{ tag: string; tiles: Tile[]; saved: Saved[] } | null>(null);
-  const { tiles, saved } = own?.tag === tag ? own : stored;
+  const { tiles: allTiles, saved } = own?.tag === tag ? own : stored;
+  const tiles = allTiles.filter((x) => !exclude.includes(x.id));
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [drag, setDrag] = useState<WidgetId | null>(null);
@@ -45,7 +45,7 @@ export function PersonalGrid({ render }: { render: (id: WidgetId) => ReactNode }
   }, [tag,remoteKey]);
   function persist(next: Tile[], layouts = saved) {
     setOwn({ tag, tiles: next, saved: layouts });
-    void storePreference(remoteKey,{tiles:next,saved:layouts}).catch(()=>toast.error(he?"נשמר מקומית; הסנכרון לשרת נכשל. רעננו לפני ניסיון נוסף.":"Saved locally; server sync failed. Reload before retrying."));
+    void storePreference(remoteKey,{tiles:next,saved:layouts}).catch(()=>toast.error(t("syncFailed")));
     try { localStorage.setItem(key, JSON.stringify({ tiles: next, saved: layouts })); }
     catch { toast.error(t("browserStorageUnavailable")); }
   }
@@ -59,15 +59,15 @@ export function PersonalGrid({ render }: { render: (id: WidgetId) => ReactNode }
     {/* Quiet header: the cards are the content, arranging them is a secondary action. */}
     <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 className="text-footnote font-semibold text-muted-foreground">{t("title")}</h2><Button variant={editing ? "default" : "ghost"} size="sm" onClick={() => setEditing(!editing)}>{editing ? t("done") : t("arrange")}</Button></div>
     {editing && <div className="mb-4 space-y-4 rounded-2xl border bg-card p-4">
-      <p className="text-sm text-muted-foreground">{he ? `הסידור נשמר בשרת ובדפדפן, בנפרד ל${mobile ? "מובייל" : "מחשב"}. גררו כרטיס או השתמשו בכפתורי הסידור.` : `Saved on this server and browser for ${mobile ? "mobile" : "desktop"}. Drag a card or use the move buttons.`}</p>
-      <div className="flex flex-wrap gap-2">{(["daily", "planning", "minimal"] as LayoutPreset[]).map((p, i) => <Button key={p} variant="secondary" onClick={() => persist(presetLayout(p))}>{(he ? ["יומיום", "תכנון", "מינימלי"] : ["Daily", "Planning", "Minimal"])[i]}</Button>)}</div>
+      <p className="text-sm text-muted-foreground">{t(mobile ? "savedHintMobile" : "savedHintDesktop")}</p>
+      <div className="flex flex-wrap gap-2">{(["daily", "planning", "minimal"] as LayoutPreset[]).map((p) => <Button key={p} variant="secondary" onClick={() => persist(presetLayout(p))}>{t(`preset_${p}`)}</Button>)}</div>
       <form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); if (name.trim()) { persist(tiles, [...saved.filter(s => s.name !== name.trim()), { name: name.trim(), tiles }].slice(-8)); setName(""); } }}><input aria-label={t("layoutName")} className="min-h-11 rounded-lg border bg-background px-3" maxLength={40} value={name} onChange={e => setName(e.target.value)} placeholder={t("nameThisLayout")} required /><Button type="submit">{t("saveLayout")}</Button></form>
       {saved.length > 0 && <div className="flex flex-wrap gap-2">{saved.map(s => <div key={s.name} className="flex gap-1"><Button variant="outline" onClick={() => persist(s.tiles)}>{s.name}</Button><Button variant="ghost" aria-label={t("deleteLayout", { name: s.name })} onClick={() => persist(tiles, saved.filter(x => x.name !== s.name))}>×</Button></div>)}</div>}
     </div>}
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {tiles.filter(t => editing || t.visible).map(tile => <div key={tile.id} className={`${tile.wide ? "md:col-span-2" : ""} min-w-0 ${editing ? "rounded-2xl border border-dashed p-3" : ""}`} onDragOver={e => { if (editing) e.preventDefault(); }} onDrop={e => { e.preventDefault(); if (drag) move(drag, tiles.findIndex(t => t.id === tile.id)); setDrag(null); }}>
         {editing && <div className="mb-3 flex flex-wrap items-center gap-2">
-          <button draggable onDragStart={() => setDrag(tile.id)} onDragEnd={() => setDrag(null)} className="min-h-11 cursor-grab rounded-lg border px-3" aria-label={t("dragTile", { name: labels[tile.id][he ? 0 : 1] })}>⠿ {labels[tile.id][he ? 0 : 1]}</button>
+          <button draggable onDragStart={() => setDrag(tile.id)} onDragEnd={() => setDrag(null)} className="min-h-11 cursor-grab rounded-lg border px-3" aria-label={t("dragTile", { name: t(`tile_${tile.id}`) })}>⠿ {t(`tile_${tile.id}`)}</button>
           <Button variant="ghost" disabled={tiles[0].id === tile.id} onClick={() => move(tile.id, tiles.findIndex(t => t.id === tile.id) - 1)} aria-label={t("moveUp")}>↑</Button><Button variant="ghost" disabled={tiles.at(-1)?.id === tile.id} onClick={() => move(tile.id, tiles.findIndex(t => t.id === tile.id) + 1)} aria-label={t("moveDown")}>↓</Button>
           <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={tile.visible} onChange={e => patch(tile.id, { visible: e.target.checked })} />{t("show")}</label>
           {!mobile && <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={tile.wide} onChange={e => patch(tile.id, { wide: e.target.checked })} />{t("fullWidth")}</label>}

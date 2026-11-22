@@ -1,20 +1,12 @@
 import { NextResponse } from "next/server";
 import { getAccountNumbers, getOwnerRows } from "@/server/db/queries/transactions";
-import { getAppSettings, getWorkspaceSetting, setWorkspaceSetting } from "@/server/db/queries/settings";
+import { getAppSettings, setWorkspaceSetting } from "@/server/db/queries/settings";
 import { getWorkspaceIdFromRequest } from "@/server/lib/workspace-context";
-import { isValidOwner, ownerSummary, type AccountOwners } from "@/lib/tags";
+import { isValidOwner, ownerSummary } from "@/lib/tags";
+import { readAccountOwners } from "@/server/lib/account-owners";
 
 const KEY = "account_owners";
 
-function readAccountOwners(workspaceId: number, memberIds: string[]): AccountOwners {
-  try {
-    const raw = JSON.parse(getWorkspaceSetting(workspaceId, KEY) ?? "{}") as Record<string, unknown>;
-    // Drop owners of members who were removed from the household.
-    return Object.fromEntries(Object.entries(raw).filter(([, v]) => isValidOwner(v, memberIds))) as AccountOwners;
-  } catch {
-    return {};
-  }
-}
 
 const memberIdsOf = (workspaceId: number) => getAppSettings(workspaceId).household.members.map((m) => m.id);
 

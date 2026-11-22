@@ -1,7 +1,9 @@
 import "server-only";
 
 import { getDb } from "../db/index";
-import { getBudgetForCategory } from "../db/queries/budgets";
+import { getEffectiveBudgets } from "../db/queries/budget-periods";
+import { getPlan } from "../db/queries/plan";
+import { budgetMonthRange } from "@/lib/finance-period";
 import { computeCashAhead } from "../insights/cash-ahead";
 import { freeLine, moneyFor } from "./snapshot";
 
@@ -26,8 +28,10 @@ export function spendFeedback(ws: number, since: string, today: string, hide = f
 
   const money = moneyFor(hide);
   const cash = computeCashAhead(ws, today);
-  // shortcut: budget month is the calendar month, upgrade to the plan's monthStartDay if budgets move to it.
-  const monthStart = `${today.slice(0, 7)}-01`;
+  // The same household month the budget screen uses, including any carry-in.
+  const startDay = getPlan(ws).monthStartDay;
+  const range = budgetMonthRange(startDay, today);
+  const budgets = getEffectiveBudgets(ws, range, startDay);
   const spentIn = db.prepare(
     `SELECT COALESCE(SUM(ABS(charged_amount)), 0) as total FROM transactions
      WHERE workspace_id = ? AND category_id = ? AND kind = 'expense' AND is_excluded = 0
@@ -36,11 +40,11 @@ export function spendFeedback(ws: number, since: string, today: string, hide = f
 
   const lines = rows.slice(0, 3).map((r) => {
     const head = `• ${money(r.amount)} ${r.description}`;
-    const budget = r.categoryId == null ? null : getBudgetForCategory(ws, r.categoryId);
-    if (!budget || budget.monthlyAmount <= 0) return r.category ? `${head} (${r.category})` : head;
-    const spent = (spentIn.get(ws, r.categoryId, monthStart, `${today}T23:59:59`) as { total: number }).total;
-    const left = budget.monthlyAmount - spent;
-    const ratio = spent / budget.monthlyAmount;
+    const budget = r.categoryId == null ? null : budgets.get(r.categoryId);
+    if (!budget || budget.budget <= 0) return r.category ? `${head} (${r.category})` : head;
+    const spent = (spentIn.get(ws, r.categoryId, range.from, `${range.to}T23:59:59`) as { total: number }).total;
+    const left = budget.budget - spent;
+    const ratio = spent / budget.budget;
     const dot = ratio >= 1 ? "🔴" : ratio >= 0.8 ? "🟡" : "🟢";
     return left < 0
       ? `${head}\n   ${dot} ${r.category}: חריגה של ${money(-left)} מהתקציב`

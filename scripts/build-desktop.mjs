@@ -52,9 +52,11 @@ for (const link of walk(links)) {
 }
 
 console.log("3/4 Checking the package holds no user data…");
-// Tracing follows the app's ./data default and copies it; this is the build copy, never the user's folder.
-for (const junk of ["data", "reports", "research_notes", ".claude", "tests", "docs", "scripts", "desktop"]) {
-  fs.rmSync(path.join(standalone, junk), { recursive: true, force: true });
+// Tracing follows reads relative to the project folder and can copy the whole repo into the build: user data, docs,
+// tests, the website, an earlier installer. Keep only what the server runs on; this is the build copy, never the user's folder.
+const KEEP = new Set(["server.js", "package.json", "node_modules", ".next", "public", "src"]);
+for (const entry of fs.readdirSync(standalone)) {
+  if (!KEEP.has(entry)) fs.rmSync(path.join(standalone, entry), { recursive: true, force: true });
 }
 // better-sqlite3 ships an N-API prebuild that loads in Electron as is, so nothing is rebuilt.
 for (const bad of ["data", "reports", "research_notes", ".claude"]) {

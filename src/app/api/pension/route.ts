@@ -4,6 +4,7 @@ import { deletePensionConnection, listPensionConnections, savePensionConnection,
 import { deliverOtp } from "@/server/sync/otp-bridge";
 import { otpKey } from "@/server/pension/sync";
 import { isPensionFund, LOGIN_FIELDS } from "@/lib/pension";
+import { demoBlockedResponse } from "@/server/demo/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,10 @@ export async function GET(request: Request) {
  * { sync: connectionId } re-syncs; { otp: connectionId, code } hands over the SMS code.
  */
 export async function POST(request: Request) {
+  // Sign-in and sync are off in the demo; the connections there are already seeded.
+  const blocked = demoBlockedResponse();
+  if (blocked) return blocked;
+
   const ws = getWorkspaceIdFromRequest(request);
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return bad("invalid JSON");

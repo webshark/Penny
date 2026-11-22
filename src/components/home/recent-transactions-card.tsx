@@ -34,7 +34,7 @@ export function RecentTransactionsCard({ items }: Props) {
         {items.slice(0, 5).map((txn) => (
           <li key={txn.id}>
             <Link
-              href="/transactions"
+              href={`/transactions?month=${txn.date.slice(0, 7)}&search=${encodeURIComponent(txn.description)}`}
               className="flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-accent/40"
             >
               <div className="flex min-w-0 flex-1 items-center gap-3">

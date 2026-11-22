@@ -4,11 +4,10 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback, u
 import { useIsHydrated } from "@/hooks/use-is-hydrated";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { useLocale } from "next-intl";
 import { readableAccent, DEFAULT_STUDIO, STUDIO_KEY, parseStudioPreferences, type StudioPreferences } from "@/lib/budget-studio";
 import { loadPreference, storePreference } from "@/lib/preference-sync";
 import {useActiveProfileId} from "@/lib/workspace-store";
-import { studioCopy } from "./dashboard/studio-copy";
+import { useStudioCopy } from "./dashboard/studio-copy";
 
 const profileKey = (id: number | null) => `${STUDIO_KEY}.profile${id ?? "default"}`;
 function writeLocal(id: number | null, value: StudioPreferences) {
@@ -21,7 +20,7 @@ type StudioContextValue = {
   preferences: StudioPreferences;
   preview: (value: StudioPreferences) => void;
   save: (value: StudioPreferences) => boolean;
-  resolvedStudioTheme: "pearl" | "midnight" | "glass";
+  resolvedStudioTheme: "pearl" | "midnight";
 };
 const StudioContext = createContext<StudioContextValue | null>(null);
 
@@ -39,7 +38,6 @@ function readStored(id: number | null): StudioPreferences | null {
 export function StudioProvider({ children }: { children: ReactNode }) {
   const ready = useIsHydrated();
   const { resolvedTheme, setTheme } = useTheme();
-  const locale = useLocale();
   const profileId=useActiveProfileId(); // per profile: each person keeps their own look
   // Snapshot is the raw key set so it stays stable between reads; parsed below.
   const raw = useSyncExternalStore(noSubscribe, () => { try { return JSON.stringify([localStorage.getItem(profileKey(profileId)), localStorage.getItem(STUDIO_KEY), localStorage.getItem("theme")]); } catch { return ""; } }, () => "");
@@ -54,7 +52,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     let active=true;
     void loadPreference("studio").then(value=>{if(active&&value){const prefs=parseStudioPreferences(JSON.stringify(value));setPreferences(prefs);try{writeLocal(profileId,prefs);}catch{}}}).catch(()=>{});
     const sync = (event: StorageEvent) => {
-      if (event.key === STUDIO_KEY || event.key === null) setPreferences(parseStudioPreferences(event.newValue));
+      // Only this profile's key: STUDIO_KEY mirrors whichever profile another tab has open, and would overwrite this one's look.
+      if (event.key === profileKey(profileId)) setPreferences(parseStudioPreferences(event.newValue));
     };
     window.addEventListener("storage", sync);
     return () => {active=false;window.removeEventListener("storage", sync);};
@@ -75,12 +74,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     if (preferences.customColor) root.style.setProperty("--custom-primary", readableAccent(preferences.customColor, resolvedStudioTheme === "midnight"));
     else root.style.removeProperty("--custom-primary");
   }, [ready, resolvedStudioTheme, preferences.accent, preferences.density, preferences.motion, preferences.customColor]);
+  const copy = useStudioCopy();
   const save = useCallback((value: StudioPreferences) => {
     setPreferences(value);
-    void storePreference("studio",value).catch(()=>toast.error(locale==="he"?"העיצוב נשמר מקומית, אך הסנכרון לשרת נכשל. רעננו לפני ניסיון נוסף.":"Saved locally, but server sync failed. Reload before retrying."));
+    void storePreference("studio",value).catch(()=>toast.error(copy.syncFailed));
     try { writeLocal(profileId, value); return true; }
-    catch { toast.error(studioCopy(locale).storageError); return false; }
-  }, [locale, profileId, setPreferences]);
+    catch { toast.error(copy.storageError); return false; }
+  }, [copy, profileId, setPreferences]);
   return <StudioContext.Provider value={{ preferences, preview: setPreferences, save, resolvedStudioTheme }}>{children}</StudioContext.Provider>;
 }
 

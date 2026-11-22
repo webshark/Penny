@@ -1,5 +1,6 @@
 "use client";
 
+import { accountLabel } from "@/lib/i18n-data";
 import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,8 +22,11 @@ import { cn } from "@/lib/utils";
 import type { Asset, AssetsPayload } from "@/lib/types";
 
 /** Fees, debts, target allocation and past net worth, under the holdings on the Investments page. */
-export function InvestmentsExtras({ data }: { data: AssetsPayload }) {
+export function InvestmentsExtras({ data: raw }: { data: AssetsPayload }) {
   const plan = useQuery({ queryKey: ["plan"], queryFn: getPlan });
+  const tBanks = useTranslations("banks");
+  // Synced accounts arrive with English bank names; show them in the user's language.
+  const data = { ...raw, assets: raw.assets.map((a) => ({ ...a, name: accountLabel(a, tBanks) })) };
   if (!plan.data) return null;
   const years = plan.data.plan.birthYear ? plan.data.plan.birthYear + plan.data.plan.retirementAge - new Date().getFullYear() : null;
   return (
@@ -299,7 +303,7 @@ function PastNetWorth({ history }: { history: AssetsPayload["history"] }) {
     <CardShell label={t("pastTitle")}>
       <p className="text-caption text-pretty text-muted-foreground">{t("pastHint")}</p>
       <form
-        className="mt-3 grid grid-cols-[1fr_1fr_auto] items-end gap-2"
+        className="mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();

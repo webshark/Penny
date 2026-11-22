@@ -22,7 +22,7 @@ export function CardShell({ label, wallet, action, children, className, id }: Ca
     <div
       id={id}
       className={cn(
-        "card-surface flex h-full flex-col",
+        "card-surface flex h-full min-w-0 flex-col",
         wallet && "wallet",
         className
       )}

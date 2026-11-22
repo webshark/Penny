@@ -85,10 +85,10 @@ export function SyncFailureBanner({ items, className }: Props) {
         </div>
         <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
           {failures.map((f) => {
-            const name = translateProviderName(f.provider, f.providerName, tBanks);
+            const name = translateProviderName(f.provider, f.providerName, tBanks) + (f.label ? ` · ${f.label}` : "");
             const { message, detail } = errorText(f.errorMessage ?? t("fallbackErrorMsg"));
             return (
-              <li key={f.provider} className="break-words">
+              <li key={f.id} className="break-words">
                 <span className="font-medium text-foreground/80">{name}:</span>{" "}
                 {message}
                 {detail && (

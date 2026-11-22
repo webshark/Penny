@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { DailyRates } from "@/lib/fx-markup";
+import { isDemoMode } from "@/server/demo/mode";
 
 // shortcut: in-memory, per process, refreshed once a day; move to quotes_cache if restarts make it refetch too often.
 const cache = new Map<string, { day: string; closes: DailyRates[string]; failedAt?: number }>();
@@ -25,6 +26,8 @@ async function fetchDaily(currency: string) {
 /** Daily market closes in shekels for each currency; a currency that fails to load is left out. */
 export async function dailyRates(currencies: string[], today: string): Promise<DailyRates> {
   const out: DailyRates = {};
+  // The demo is offline: rates are left empty rather than asking Yahoo.
+  if (isDemoMode()) return out;
   await Promise.all(
     currencies
       .filter((c) => /^[A-Z]{3}$/.test(c) && c !== "ILS")

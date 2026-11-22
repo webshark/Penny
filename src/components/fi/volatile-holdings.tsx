@@ -47,7 +47,7 @@ export function VolatileHoldings() {
             <span className="rounded-full bg-status-heads-up/15 px-2 py-0.5 text-caption font-medium text-status-heads-up">{t("volatile")}</span>
           </div>
           <p className="mb-3 text-caption text-pretty text-muted-foreground">{t("note")}</p>
-          <ul className="divide-y divide-border/60">
+          <ul className="row-grid">
             {list.map((a) => {
               const c = a.change;
               return (

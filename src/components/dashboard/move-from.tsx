@@ -25,12 +25,17 @@ export function MoveFrom({ target, card, rows, month, moves }: { target: Categor
   const source = sources.find((s) => s.categoryId === fromId) ?? sources[0];
   const amount = source ? Math.ceil(Math.min(over, source.room)) : 0;
 
-  const set = (moves: unknown) => qc.setQueryData(["budget-moves", month], moves);
-  const undo = useMutation({ mutationFn: () => undoBudgetMove(month, moves.length), onSuccess: set });
+  // Budgets read from the summary already include the move, so refresh it with the moves list.
+  const refresh = (next: unknown) => {
+    qc.setQueryData(["budget-moves", month], next);
+    void qc.invalidateQueries({ queryKey: ["summary"] });
+    void qc.invalidateQueries({ queryKey: ["budget-period-lines"] });
+  };
+  const undo = useMutation({ mutationFn: () => undoBudgetMove(month, moves.length), onSuccess: refresh });
   const move = useMutation({
     mutationFn: () => addBudgetMove(month, { from: source!.categoryId, to: target.categoryId, amount }),
     onSuccess: (moves) => {
-      set(moves);
+      refresh(moves);
       toast.success(t("moved", { amount: shekels(amount, locale) }), { action: { label: t("undo"), onClick: () => undo.mutate() } });
     },
     onError: () => toast.error(t("failed")),
@@ -75,7 +80,11 @@ export function MovedIn({ card, rows, month, moves }: { card: CategoryWithData; 
   const qc = useQueryClient();
   const undo = useMutation({
     mutationFn: (index: number) => undoBudgetMove(month, index),
-    onSuccess: (m) => qc.setQueryData(["budget-moves", month], m),
+    onSuccess: (m) => {
+      qc.setQueryData(["budget-moves", month], m);
+      void qc.invalidateQueries({ queryKey: ["summary"] });
+      void qc.invalidateQueries({ queryKey: ["budget-period-lines"] });
+    },
   });
   const ids = new Set([card.categoryId, ...rows.filter((r) => r.parentId === card.categoryId).map((r) => r.categoryId)]);
   const nameOf = (id: number) => translateCategoryName(rows.find((r) => r.categoryId === id)?.categoryName ?? "", tCat);

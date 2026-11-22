@@ -291,7 +291,7 @@ export function BankStep({ onComplete }: BankStepProps) {
               >
                 <Plus className="size-4" aria-hidden />
               </IconButton>
-              <IconButton
+              <IconButton showLabel
                 label={t("bankContinueToAi")}
                 variant="default"
                 onClick={onComplete}
@@ -743,7 +743,7 @@ function CredentialForm({
             >
               <PlugZap className="size-4" aria-hidden />
             </IconButton>
-            <IconButton
+            <IconButton showLabel
               label={saving
                 ? tCommon("saving")
                 : isEdit

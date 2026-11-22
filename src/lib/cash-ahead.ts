@@ -27,12 +27,15 @@ export function cashAhead(input: {
   incomeSoFar: number;
   bankDebits?: {date:string;total:number}[];
   reservedCash?: number;
+  /** The bank already shows today's card-bill debit, so a bill dated today is in the balance and not still due. */
+  billPaidToday?: boolean;
 }): CashAhead {
   const [y, m, d] = input.today.split("-").map(Number);
   const next = d < input.payday ? new Date(y, m - 1, input.payday) : new Date(y, m, input.payday);
   const until = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
   const daysLeft = Math.round((next.getTime() - new Date(y, m - 1, d).getTime()) / 86_400_000);
-  const billsDue = input.bills.filter((b) => b.date >= input.today && b.date <= until).reduce((s, b) => s + b.total, 0);
+  const due = (b: { date: string }) => (input.billPaidToday ? b.date > input.today : b.date >= input.today) && b.date <= until;
+  const billsDue = input.bills.filter(due).reduce((s, b) => s + b.total, 0);
   // Salary still to come before the period ends: only when payday is later this month and it has not landed.
   const salaryExpected = d < input.payday && input.incomeSoFar < input.monthlyIncome * 0.5 ? input.monthlyIncome : 0;
   const bankDebitsDue=(input.bankDebits??[]).filter(b=>b.date>=input.today&&b.date<=until).reduce((sum,b)=>sum+b.total,0);

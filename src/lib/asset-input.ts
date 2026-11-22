@@ -14,6 +14,7 @@ export function parseAssetInput(raw: unknown): AssetInput | string {
   const quantity = num(r.quantity);
   const manualValue = num(r.manualValue);
   const costBasis = num(r.costBasis);
+  const costFx = currency === "ILS" ? null : num(r.costFx);
   const extra = {
     feeDeposit: num(r.feeDeposit),
     feeBalance: num(r.feeBalance),
@@ -32,8 +33,11 @@ export function parseAssetInput(raw: unknown): AssetInput | string {
         purchasePrice: num(r.purchasePrice),
         purchaseMonth: typeof r.purchaseMonth === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(r.purchaseMonth) ? r.purchaseMonth : null,
       }
-    : {};
-  for (const [k, v] of Object.entries({ quantity, manualValue, costBasis, ...extra, ...home })) {
+    : r.type === "study_fund"
+      // A study fund's opening month: it decides when the money becomes liquid.
+      ? { purchaseMonth: typeof r.purchaseMonth === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(r.purchaseMonth) ? r.purchaseMonth : null }
+      : {};
+  for (const [k, v] of Object.entries({ quantity, manualValue, costBasis, costFx, ...extra, ...home })) {
     if (typeof v === "string") continue;
     if (v !== null && (!Number.isFinite(v) || v < 0)) return `${k} must be a positive number for ${name}`;
   }
@@ -48,6 +52,7 @@ export function parseAssetInput(raw: unknown): AssetInput | string {
     quantity: symbol ? quantity : null,
     manualValue: symbol ? null : manualValue,
     costBasis,
+    costFx: costFx && costFx > 0 ? costFx : null,
     liquid: r.liquid !== false,
     note: typeof r.note === "string" && r.note.trim() ? r.note.trim().slice(0, 200) : null,
     ...extra,

@@ -6,6 +6,8 @@ export const IL = {
   year: 2026,
   /** Monthly salary ceiling for tax-exempt study fund deposits (salaried). 2026, frozen. https://www.mygemel.net/blog/?p=3453 */
   studyFundSalaryCeiling: 15_712,
+  /** A study fund is free to withdraw, tax-free, six years after the first deposit (three at retirement age). Income Tax Ordinance §3(e1). https://www.kolzchut.org.il/he/קרן_השתלמות */
+  studyFundLiquidYears: 6,
   /** Value of one tax credit point, per month. 2026, frozen (₪2,904/year). https://www.kolzchut.org.il/he/נקודות_זיכוי_ממס_הכנסה */
   creditPointMonthly: 242,
   /** Tax on real capital gains for an individual (Ordinance §91); 30% for a substantial shareholder. */

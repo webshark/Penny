@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { ExternalLink, Trash2 } from "lucide-react";
+import { ExternalLink, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Forward } from "@/components/ui/dir-chevron";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,7 @@ export function HouseholdSettings() {
   const { household, loading } = useHousehold();
 
   return (
-    <SectionShell title={t("title")} description={t("description")}>
+    <SectionShell title={t("title")} description={t("description")} icon={<Users aria-hidden />}>
       {loading ? (
         <SettingCard>
           <div className="text-sm text-muted-foreground">{tCommon("loading")}</div>

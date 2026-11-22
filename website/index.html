@@ -4,16 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Penny · כסף רגוע למשק הבית</title>
-<meta name="description" content="אפליקציית כסף למשקי בית בישראל שרצה אצלכם במחשב: בנקים ואשראי, תקציב שבועי, כלי מס ופנסיה, פרופילים למשפחה. קוד פתוח, בלי ענן.">
+<meta name="description" content="אפליקציית כסף למשקי בית בישראל שרצה אצלכם במחשב: בנקים ואשראי, תקציב וכסף על השולחן, כלי מס ופנסיה, פרופילים למשפחה. קוד פתוח, בלי ענן.">
 <meta property="og:title" content="Penny · כסף רגוע למשק הבית">
 <meta property="og:description" content="הבנקים, התקציב והעתיד שלכם במקום אחד, על המחשב שלכם.">
-<meta property="og:image" content="assets/shots/he/home.webp">
-<link rel="alternate" hreflang="en" href="en/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%235541cc'/%3E%3Crect x='10' y='12' width='4' height='8' rx='2' fill='white'/%3E%3Crect x='18' y='12' width='4' height='8' rx='2' fill='white'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=0.2.2">
+<meta property="og:image" content="https://sergey-bar.github.io/Penny/assets/og-he.jpg">
+<link rel="canonical" href="https://sergey-bar.github.io/Penny/">
+<link rel="alternate" hreflang="he" href="https://sergey-bar.github.io/Penny/">
+<link rel="alternate" hreflang="en" href="https://sergey-bar.github.io/Penny/en/">
+<link rel="alternate" hreflang="x-default" href="https://sergey-bar.github.io/Penny/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sergey-bar.github.io/Penny/">
+<meta property="og:site_name" content="Penny">
+<meta property="og:locale" content="he_IL">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#5541cc">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Penny", "applicationCategory": "FinanceApplication", "operatingSystem": "Windows, macOS, Linux", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "ILS"}, "license": "https://opensource.org/licenses/MIT", "url": "https://sergey-bar.github.io/Penny/", "image": "https://sergey-bar.github.io/Penny/assets/og-he.jpg", "description": "אפליקציית כסף למשקי בית בישראל שרצה אצלכם במחשב: בנקים ואשראי, תקציב וכסף על השולחן, כלי מס ופנסיה, פרופילים למשפחה. קוד פתוח, בלי ענן.", "inLanguage": "he", "softwareVersion": "0.2.0", "downloadUrl": "https://github.com/Sergey-Bar/Penny/releases/latest"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "זה בטוח לתת לאפליקציה את הסיסמה לבנק?", "acceptedAnswer": {"@type": "Answer", "text": "הסיסמה נשמרת רק על המחשב שלכם, מוצפנת ב-AES-256-GCM, ונשלחת רק לאתר של הבנק עצמו בזמן הסנכרון. אין שרת של Penny שהיא עוברת דרכו. אפשר גם להפעיל נעילה עם סיסמה, ואז מפתח ההצפנה עצמו לא נשמר על הדיסק בלי הסיסמה שלכם. הקוד פתוח, כך שכל אחד יכול לבדוק מה הוא עושה."}}, {"@type": "Question", "name": "לאן הנתונים שלי הולכים?", "acceptedAnswer": {"@type": "Answer", "text": "לשום מקום. האפליקציה רצה על המחשב שלכם, מאזינה רק לכתובת המקומית 127.0.0.1, וחוסמת בקשות מאתרים אחרים. נתונים יוצאים רק אם בחרתם בזה: לספק AI בענן אם בחרתם בו (או בכלל לא, עם Ollama או בלי AI), ולטלגרם אם חיברתם בוט."}}, {"@type": "Question", "name": "מה קורה אם המחשב מתקלקל?", "acceptedAnswer": {"@type": "Answer", "text": "אפשר להגדיר גיבוי אוטומטי מוצפן לתיקייה ש-Google Drive, OneDrive, Dropbox או iCloud מסנכרנים. הקובץ נפתח רק עם סיסמת הגיבוי שלכם, ושחזור מחזיר את כל הנתונים, כולל הגישה לחשבונות."}}, {"@type": "Question", "name": "כמה זה עולה?", "acceptedAnswer": {"@type": "Answer", "text": "כלום. Penny היא קוד פתוח ברישיון MIT, בלי מנוי, בלי פרסומות ובלי גרסה בתשלום. AI בענן, אם תבחרו בו, עולה שבריר שקל לסנכרון ישירות לספק."}}, {"@type": "Question", "name": "זה עובד עם הבנק שלי?", "acceptedAnswer": {"@type": "Answer", "text": "סנכרון אוטומטי עובד עם 18 בנקים וחברות אשראי בישראל, וגם בנקאות פתוחה. כל השאר נכנס מקובץ CSV או Excel, או בהדבקה של טבלה."}}, {"@type": "Question", "name": "זה מותר?", "acceptedAnswer": {"@type": "Answer", "text": "משיכת נתונים אוטומטית מאתר הבנק עלולה להפר את תנאי השימוש של הבנק. Penny נועדה לשימוש אישי בחשבונות שלכם בלבד, על המחשב שלכם. לא מפעילים אותה כשירות עבור אחרים."}}, {"@type": "Question", "name": "יש אפליקציה לטלפון?", "acceptedAnswer": {"@type": "Answer", "text": "אין אפליקציה בחנות, אבל אפשר לפתוח את Penny מהטלפון ברשת הביתית (בהפעלה מפורשת ועם נעילה) ולהתקין אותה למסך הבית. יש גם בוט טלגרם עם סיכום שלוש פעמים בשבוע."}}, {"@type": "Question", "name": "צריך להבין במחשבים?", "acceptedAnswer": {"@type": "Answer", "text": "לא. ב-Windows ו-Mac מורידים קובץ התקנה ומפעילים, בלי טרמינל. ב-Windows האפליקציה גם מתעדכנת לבד."}}]}</script>
 </head>
 <body>
 <a class="skip" href="#main">דילוג לתוכן</a>
@@ -22,8 +35,8 @@
   <div class="wrap">
     <a class="brand" href="./" aria-label="Penny, לדף הבית"><span class="brand-mark" aria-hidden="true"><span></span><span></span></span>Penny</a>
     <nav class="nav-links" aria-label="ניווט ראשי">
-      <a class="hide-sm" href="#tour">סיור במוצר</a><a class="hide-sm" href="#mobile">בטלפון</a><a class="hide-sm" href="#tools">כלים</a><a class="hide-sm" href="#privacy">פרטיות</a>
-      <a href="#install">התקנה</a>
+      <a href="demo/">דמו לחיץ</a><a class="hide-sm" href="#tour">סיור במוצר</a><a class="hide-sm" href="#mobile">בטלפון</a><a class="hide-sm" href="#tools">כלים</a><a class="hide-sm" href="#privacy">פרטיות</a>
+      <a class="hide-sm" href="#faq">שאלות</a><a href="#install">התקנה</a>
       <a class="lang" href="en/" hreflang="en" lang="en">English</a>
     </nav>
   </div>
@@ -35,14 +48,16 @@
       <div>
         <span class="eyebrow">קוד פתוח · רץ אצלכם במחשב · חינם</span>
         <h1><em>כסף רגוע</em><br>למשק הבית.</h1>
-        <p class="lead">הבנקים, התקציב והעתיד שלכם במקום אחד. תקציב לכל שבוע, כלים לכל החלטה גדולה, וכל הנתונים נשארים אצלכם בבית.</p>
+        <p class="lead">הבנקים, התקציב והעתיד שלכם במקום אחד. תקציב שמראה את הקצב, כלים לכל החלטה גדולה, וכל הנתונים נשארים אצלכם בבית.</p>
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/Sergey-Bar/Penny/releases">הורדה ל-Windows</a>
-          <a class="btn btn-ghost" href="https://github.com/Sergey-Bar/Penny">הקוד בגיטהאב</a>
+          <a class="btn btn-primary btn-dl" data-os="win" href="https://github.com/Sergey-Bar/Penny/releases/download/v0.2.0/Penny-Setup-0.2.0.exe"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm8.5-1.2L21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zm8.5 0H21V21l-9.5-1.3z"/></svg><span><b>הורדה ל-Windows</b><small>גרסה <bdi dir="ltr">0.2.0</bdi> · <bdi dir="ltr">174 MB</bdi></small></span></a>
+          <a class="btn btn-ghost btn-dl" data-os="mac" href="https://github.com/Sergey-Bar/Penny/releases/download/v0.2.0/Penny-0.2.0-arm64.dmg"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.5 2-3.6 2.1-3.7-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9s-2-.9-3.3-.8a4.9 4.9 0 0 0-4.1 2.5c-1.8 3-.5 7.5 1.2 10 .8 1.2 1.8 2.6 3.1 2.5 1.2-.1 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4a10 10 0 0 0 1.3-2.8 4.3 4.3 0 0 1-2.3-4.2zM14 5.1A4.4 4.4 0 0 0 15 2a4.5 4.5 0 0 0-2.9 1.5 4.2 4.2 0 0 0-1.1 3c1.1.1 2.2-.6 3-1.4z"/></svg><span><b>הורדה ל-Mac</b><small>Apple Silicon · <bdi dir="ltr">188 MB</bdi></small></span></a>
         </div>
+        <p class="cta-links"><a data-os="linux" href="#install">Docker לשרת או לנאס</a><a href="https://github.com/Sergey-Bar/Penny/releases/download/v0.2.0/Penny-0.2.0-x64.dmg">מעבד Intel? הורדה לגרסת Intel</a><a href="https://github.com/Sergey-Bar/Penny/releases">כל ההורדות והגרסאות</a><a href="demo/">נסו את הדמו</a><a href="https://github.com/Sergey-Bar/Penny">הקוד בגיטהאב</a></p>
+        <ul class="gh-stats" data-gh-stats hidden><li><span aria-hidden="true">★</span> <b data-gh="stars"></b> כוכבים בגיטהאב</li><li><span aria-hidden="true">⬇</span> <b data-gh="downloads"></b> הורדות</li><li>גרסה <b data-gh="version"></b></li></ul>
       </div>
       <div class="hero-art">
-        <div class="phone"><img src="assets/shots/he/m-home.webp" width="560" height="1212" alt="מסך הבית של Penny בטלפון: כמה צפוי להישאר בסוף החודש"></div>
+        <div class="phone"><img src="assets/shots/he/m-home.webp" width="563" height="1218" alt="מסך הבית של Penny בטלפון: כמה צפוי להישאר בסוף החודש"></div>
         <div class="pip">
           <div class="pip-stage" role="img" aria-label="פיפ, החבר הקטן של Penny"><boop-face size="170" color="#30d158"></boop-face></div>
           <h2>זה פיפ</h2>
@@ -54,6 +69,19 @@
     </div>
   </div>
 
+  <section id="new">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">חדש בגרסה 0.2.0</span>
+        <h2>מראה חדש, וחכמה יותר גם בלי AI.</h2>
+        <p>הגרסה הגדולה עד היום: עיצוב חדש מקצה לקצה, שכבות חכמות שעובדות בלי AI ובלי רשת, ובדיקות על בנק מדומה מקצה לקצה.</p>
+      </div>
+      <figure class="tour-video"><video src="assets/tour-he.webm" poster="assets/shots/he/home.webp" width="1280" height="800" controls muted loop playsinline preload="none" aria-label="סיור של 30 שניות באפליקציה עם משק בית לדוגמה"></video></figure>
+      <div class="grid"><div class="card"><div class="icon c1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d="M13 9h5M13 13h5"/></svg></div><h3>מראה חדש</h3><p>בהיר, כהה או לפי המכשיר. תפריט צד שנשאר במקום, סרגל עליון אחד עם חיפוש והוספה, ותנועה רכה בכל פתיחה וסגירה.</p></div><div class="card"><div class="icon c2" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></svg></div><h3>טבלאות במקום כרטיסים</h3><p>תנועות ותקציב נפתחים ישר בטבלה: כל המסננים בשורה אחת, ותקציב שעורכים במקום עם סימון של קצב החודש.</p></div><div class="card"><div class="icon c3" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg></div><h3>מרכז ניתוח</h3><p>תפריט דוחות אחד, טבלת ציר של הוצאות לפי קבוצה וחודש, ושווי נקי לאורך זמן.</p></div><div class="card"><div class="icon c4" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="5"/><path d="M12 6V3"/><path d="M9 12v2M15 12v2"/></svg></div><h3>פיפ חי</h3><p>מחכה כשמשהו נשמר, מהנהן כשזה הצליח, מקליד איתכם ועוקב אחרי העכבר. לכל פרופיל תמונה משלו.</p></div><div class="card"><div class="icon c1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5"/><path d="M18.1 10.4a5 5 0 1 1-6.7 6.7"/><path d="M8 6v4h2"/></svg></div><h3>כסף על השולחן</h3><p>סכום אחד בשנה לכל מה שאפשר לחסוך: דמי ניהול גבוהים, ביטוחים כפולים, עמלות, ריבית על מינוס וכסף שיושב בעו"ש. ליד כל סעיף הצעד הבא.</p></div><div class="card"><div class="icon c2" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10l-5.1 3.3L16.5 20 12 16.3 7.5 20l1.6-6.7L4 10l6.1-1.2z"/></svg></div><h3>מסווג לבד, בלי AI</h3><p>מילון של כ-200 בתי עסק ישראליים וזיכרון של מה שלימדתם. AI רק למה שנשאר, אם בכלל.</p></div><div class="card"><div class="icon c3" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></div><h3>למה ההוצאות השתנו</h3><p>החודש מול אותם ימים בחודש הקודם או בשנה שעברה, לפי בית עסק: מחיר, כמות, חדש או חד-פעמי.</p></div><div class="card"><div class="icon c4" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14a6 6 0 0 1 3.5 6"/></svg></div><h3>חלוקה, מעטפות ודירוג אשראי</h3><p>מי חייב לכם מה, כמה מההכנסה כבר קיבל תפקיד, ודירוג האשראי שלכם לאורך זמן.</p></div><div class="card"><div class="icon c5" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div><h3>מס בלי לחפש</h3><p>זיהוי תרומות וזיכוי של 35% לפי סעיף 46, נקודות זיכוי ורמז להחזר מס.</p></div><div class="card"><div class="icon c6" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div><h3>מתעדכנת לבד</h3><p>ב-Windows הגרסה החדשה יורדת ונבדקת לבד, ומותקנת כשמפעילים מחדש. וגם סיכום בטלגרם שלוש פעמים בשבוע.</p></div></div>
+      <p class="new-links"><a class="btn btn-primary" href="demo/">לנסות את הדמו</a> <a class="btn btn-ghost" href="https://github.com/Sergey-Bar/Penny/blob/main/CHANGELOG.md">כל השינויים</a></p>
+    </div>
+  </section>
+
   <section id="tour">
     <div class="wrap">
       <div class="section-head">
@@ -64,12 +92,12 @@
       <div class="split">
         <div>
           <span class="kicker">בית</span>
-          <h3>מספר אחד ברור: כמה צפוי להישאר</h3>
-          <p>מסך הבית עונה קודם כול על השאלה החשובה: כמה כסף יישאר בסוף החודש. מצב פשוט מראה רק את זה, ומצב מתקדם פותח את כל התמונה.</p>
+          <h3>כל הבית במבט אחד</h3>
+          <p>לוח בקרה עם אריחים שאפשר להסתיר ולהחזיר: יתרה צפויה, כסף על השולחן, תזרים, מבנה ההוצאות ומי הוציא מה. ומסך פוקוס רגוע למי שרוצה רק את השורה התחתונה.</p>
           <ul><li>צפוי להישאר, וכמה יצא עד עכשיו מתוך התקציב</li><li>מעבר בין חודשי השנה בלחיצה</li><li>הוספת תנועה במזומן בשנייה</li><li>פיפ מראה אם משהו דורש טיפול, והצעד הבא מוצג מתחת</li></ul>
         </div>
         <div>
-          <a class="shot" href="assets/shots/he/home.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/home.webp" width="1400" height="802" alt="מסך הבית במחשב" loading="lazy"></a>
+          <a class="shot" href="demo/he/home.webp" title="פתיחת הצילום בגודל מלא"><img src="demo/he/home.webp" width="1440" height="900" alt="מסך הבית במחשב" loading="lazy"></a>
         </div>
       </div>
       <div class="split flip">
@@ -80,7 +108,7 @@
           <ul><li>חיפוש, סינון לפי קטגוריה, פיצול ותגיות</li><li>תור "לבדיקה" לתנועות חדשות, והתחשבנויות בנפרד</li><li>AI לבחירתכם מסווג תנועות, או בלי AI בכלל</li><li>כללים אוטומטיים לבתי עסק שחוזרים</li></ul>
         </div>
         <div>
-          <a class="shot" href="assets/shots/he/transactions.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/transactions.webp" width="1400" height="875" alt="רשימת התנועות לפי שבועות" loading="lazy"></a>
+          <a class="shot" href="demo/he/transactions.webp" title="פתיחת הצילום בגודל מלא"><img src="demo/he/transactions.webp" width="1440" height="900" alt="רשימת התנועות לפי שבועות" loading="lazy"></a>
         </div>
       </div>
       <div class="split">
@@ -91,7 +119,7 @@
           <ul><li>לאן הכסף הולך, לפי קטגוריות</li><li>תצוגת 50/30/20</li><li>סיכום לפי חודש, רבעון, חצי שנה ושנה, כולל שיעור חיסכון</li><li>לוח שנה של חיובים צפויים וחיובים קבועים</li></ul>
         </div>
         <div>
-          <a class="shot" href="assets/shots/he/budget.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/budget.webp" width="1400" height="958" alt="לוח התקציב" loading="lazy"></a><div class="pair"><figure><a class="shot" href="assets/shots/he/summary.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/summary.webp" width="1400" height="825" alt="סיכום רבעוני: הכנסות, הוצאות ושיעור חיסכון" loading="lazy"></a><figcaption>סיכום רבעוני: הכנסות, הוצאות ושיעור חיסכון</figcaption></figure><figure><a class="shot" href="assets/shots/he/ahead.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/ahead.webp" width="1400" height="916" alt="מה צפוי: חיובים קרובים בלוח שנה" loading="lazy"></a><figcaption>מה צפוי: חיובים קרובים בלוח שנה</figcaption></figure></div>
+          <a class="shot" href="demo/he/budget.webp" title="פתיחת הצילום בגודל מלא"><img src="demo/he/budget.webp" width="1440" height="900" alt="לוח התקציב" loading="lazy"></a><div class="pair"><figure><a class="shot" href="assets/shots/he/summary.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/summary.webp" width="1440" height="900" alt="סיכום רבעוני: הכנסות, הוצאות ושיעור חיסכון" loading="lazy"></a><figcaption>סיכום רבעוני: הכנסות, הוצאות ושיעור חיסכון</figcaption></figure><figure><a class="shot" href="assets/shots/he/ahead.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/ahead.webp" width="1440" height="900" alt="מה צפוי: חיובים קרובים בלוח שנה" loading="lazy"></a><figcaption>מה צפוי: חיובים קרובים בלוח שנה</figcaption></figure></div>
         </div>
       </div>
       <div class="split flip">
@@ -102,7 +130,7 @@
           <ul><li>נכסים, התחייבויות ושווי נקי</li><li>הקצאה לפי סוג ומטבע, והשוואה ל-S&P 500 ולת"א 125</li><li>מחשבון עצמאות כלכלית עם אירועים בחיים ויעדים</li><li>רשימות לפי שלב חיים, עם קישורים למקורות רשמיים</li></ul>
         </div>
         <div>
-          <a class="shot" href="assets/shots/he/investments.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/investments.webp" width="1400" height="1046" alt="מסך ההשקעות והשווי הנקי" loading="lazy"></a><div class="pair"><figure><a class="shot" href="assets/shots/he/fi.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/fi.webp" width="1400" height="1062" alt="עצמאות כלכלית: כמה זמן נשאר" loading="lazy"></a><figcaption>עצמאות כלכלית: כמה זמן נשאר</figcaption></figure><figure><a class="shot" href="assets/shots/he/life.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/life.webp" width="1400" height="941" alt="שלבי החיים: מה רלוונטי לכם עכשיו" loading="lazy"></a><figcaption>שלבי החיים: מה רלוונטי לכם עכשיו</figcaption></figure></div>
+          <a class="shot" href="assets/shots/he/investments.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/investments.webp" width="1440" height="900" alt="מסך ההשקעות והשווי הנקי" loading="lazy"></a><div class="pair"><figure><a class="shot" href="assets/shots/he/fi.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/fi.webp" width="1440" height="900" alt="עצמאות כלכלית: כמה זמן נשאר" loading="lazy"></a><figcaption>עצמאות כלכלית: כמה זמן נשאר</figcaption></figure><figure><a class="shot" href="assets/shots/he/life.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/life.webp" width="1440" height="900" alt="שלבי החיים: מה רלוונטי לכם עכשיו" loading="lazy"></a><figcaption>שלבי החיים: מה רלוונטי לכם עכשיו</figcaption></figure></div>
         </div>
       </div>
     </div>
@@ -115,11 +143,11 @@
           <span class="kicker">בטלפון</span>
           <h3>נוח ביד אחת, כמו אפליקציה.</h3>
           <p>Penny מתאימה את עצמה לטלפון, לטאבלט ולמחשב. בטלפון יש סרגל תחתון, כפתור הוספה צף ומסכים שנגללים באגודל. הגישה מהטלפון עוברת ברשת הביתית, רק אחרי שהפעלתם אותה ועם קוד.</p>
-          <ul><li>חמישה לשוניות למטה: בית, תנועות, תקציב, עתיד, כלים</li><li>ערכה כהה וערכה בהירה</li><li>אפשר להתקין כאפליקציה במסך הבית של הטלפון</li></ul>
+          <ul><li>חמש לשוניות למטה: לוח בקרה, תנועות, תקציב, חשבונות ותפריט</li><li>ערכה כהה וערכה בהירה</li><li>אפשר להתקין כאפליקציה במסך הבית של הטלפון</li></ul>
         </div>
         <img class="photo" src="assets/people-hero.webp" width="1400" height="788" alt="זוג יושב במטבח ומסתכל יחד על מסך" loading="lazy">
       </div>
-      <div class="phones" tabindex="0"><figure><div class="phone"><img src="assets/shots/he/m-home.webp" width="560" height="1212" alt="בית" loading="lazy"></div><figcaption>בית</figcaption></figure><figure><div class="phone"><img src="assets/shots/he/m-transactions.webp" width="560" height="1212" alt="תנועות" loading="lazy"></div><figcaption>תנועות</figcaption></figure><figure><div class="phone"><img src="assets/shots/he/m-budget.webp" width="560" height="1212" alt="תקציב" loading="lazy"></div><figcaption>תקציב</figcaption></figure><figure><div class="phone"><img src="assets/shots/he/m-future.webp" width="560" height="1212" alt="עתיד" loading="lazy"></div><figcaption>עתיד</figcaption></figure><figure><div class="phone"><img src="assets/shots/he/m-more.webp" width="560" height="1212" alt="כלים" loading="lazy"></div><figcaption>כלים</figcaption></figure><figure><div class="phone"><img src="assets/phone-dark.webp" width="780" height="1688" alt="ערכה כהה" loading="lazy"></div><figcaption>ערכה כהה</figcaption></figure></div>
+      <div class="phones" tabindex="0"><figure><div class="phone"><img src="assets/shots/he/m-home.webp" width="563" height="1218" alt="בית" loading="lazy"></div><figcaption>בית</figcaption></figure><figure><div class="phone"><img src="assets/shots/he/m-transactions.webp" width="563" height="1218" alt="תנועות" loading="lazy"></div><figcaption>תנועות</figcaption></figure><figure><div class="phone"><img src="assets/shots/he/m-budget.webp" width="563" height="1218" alt="תקציב" loading="lazy"></div><figcaption>תקציב</figcaption></figure><figure><div class="phone"><img src="assets/shots/he/m-future.webp" width="563" height="1218" alt="עתיד" loading="lazy"></div><figcaption>עתיד</figcaption></figure><figure><div class="phone"><img src="assets/shots/he/m-more.webp" width="563" height="1218" alt="כלים" loading="lazy"></div><figcaption>כלים</figcaption></figure><figure><div class="phone"><img src="assets/phone-dark.webp" width="780" height="1688" alt="ערכה כהה" loading="lazy"></div><figcaption>ערכה כהה</figcaption></figure></div>
     </div>
   </section>
 
@@ -144,7 +172,7 @@
         <h2>התשובות שבאמת חשובות כאן.</h2>
         <p>יותר מ-25 מחשבונים וכלים מודרכים, מרכז ידע, ובדיקות תקופתיות. כל כלי מציין לאיזו שנה הנתונים שלו נכונים, והקוד מפנה למקור.</p>
       </div>
-      <div class="gallery"><figure><a class="shot" href="assets/shots/he/calculators.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/calculators.webp" width="1400" height="529" alt="מחשבונים" loading="lazy"></a><h3>מחשבונים</h3><figcaption>מסודרים לפי נושא: חיסכון וחובות, בית, רכב ושכר.</figcaption></figure><figure><a class="shot" href="assets/shots/he/mortgage.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/mortgage.webp" width="1400" height="1079" alt="משכנתא" loading="lazy"></a><h3>משכנתא</h3><figcaption>תמהיל מסלולים עם מגבלות בנק ישראל, החזר חודשי ועלות כוללת.</figcaption></figure><figure><a class="shot" href="assets/shots/he/learn.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/learn.webp" width="1400" height="947" alt="מרכז ידע" loading="lazy"></a><h3>מרכז ידע</h3><figcaption>11 מדריכים קצרים בעברית ובאנגלית, מקרן חירום ועד פרישה.</figcaption></figure><figure><a class="shot" href="assets/shots/he/wellbeing.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/wellbeing.webp" width="1400" height="937" alt="בדיקת רווחה" loading="lazy"></a><h3>בדיקת רווחה</h3><figcaption>שאלון קצר לפי סולם הרווחה הכלכלית של ה-CFPB, עם מעקב בין רבעונים.</figcaption></figure><figure><a class="shot" href="assets/shots/he/recap.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/recap.webp" width="1400" height="560" alt="סיכום חודשי" loading="lazy"></a><h3>סיכום חודשי</h3><figcaption>החודש שעבר בכמה שקפים, עם אפשרות לשמור כתמונה.</figcaption></figure><figure><a class="shot" href="assets/shots/he/a11y.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/a11y.webp" width="1400" height="447" alt="נגישות" loading="lazy"></a><h3>נגישות</h3><figcaption>גודל טקסט, ניגודיות, גופן קריא, עצירת אנימציות ועוד, לכל פרופיל בנפרד.</figcaption></figure></div>
+      <div class="gallery"><figure><a class="shot" href="assets/shots/he/calculators.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/calculators.webp" width="1440" height="900" alt="מחשבונים" loading="lazy"></a><h3>מחשבונים</h3><figcaption>מסודרים לפי נושא: חיסכון וחובות, בית, רכב ושכר.</figcaption></figure><figure><a class="shot" href="assets/shots/he/mortgage.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/mortgage.webp" width="1440" height="900" alt="משכנתא" loading="lazy"></a><h3>משכנתא</h3><figcaption>תמהיל מסלולים עם מגבלות בנק ישראל, החזר חודשי ועלות כוללת.</figcaption></figure><figure><a class="shot" href="assets/shots/he/learn.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/learn.webp" width="1440" height="900" alt="מרכז ידע" loading="lazy"></a><h3>מרכז ידע</h3><figcaption>11 מדריכים קצרים בעברית ובאנגלית, מקרן חירום ועד פרישה.</figcaption></figure><figure><a class="shot" href="assets/shots/he/wellbeing.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/wellbeing.webp" width="1440" height="900" alt="בדיקת רווחה" loading="lazy"></a><h3>בדיקת רווחה</h3><figcaption>שאלון קצר לפי סולם הרווחה הכלכלית של ה-CFPB, עם מעקב בין רבעונים.</figcaption></figure><figure><a class="shot" href="assets/shots/he/recap.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/recap.webp" width="1440" height="900" alt="סיכום חודשי" loading="lazy"></a><h3>סיכום חודשי</h3><figcaption>החודש שעבר בכמה שקפים, עם אפשרות לשמור כתמונה.</figcaption></figure><figure><a class="shot" href="assets/shots/he/a11y.webp" title="פתיחת הצילום בגודל מלא"><img src="assets/shots/he/a11y.webp" width="1440" height="900" alt="נגישות" loading="lazy"></a><h3>נגישות</h3><figcaption>גודל טקסט, ניגודיות, גופן קריא, עצירת אנימציות ועוד, לכל פרופיל בנפרד.</figcaption></figure></div>
       <div class="tools"><div class="tool-row"><strong><i style="background:#c8384f"></i>מס</strong><span>נקודות זיכוי והחזר מס עד 6 שנים אחורה, מיצוי הטבות מס בפנסיה ובקרן השתלמות, קיזוז הפסדים, נטו מברוטו</span></div><div class="tool-row"><strong><i style="background:#5541cc"></i>פנסיה ופרישה</strong><span>דמי הניהול שלכם מול השוק, מדריך לדוח המסלקה, בחירת מסלול, קצבה או היוון, פיצויים במעבר עבודה, גשר לפרישה מוקדמת</span></div><div class="tool-row"><strong><i style="background:#2b8a4e"></i>רשת ביטחון</strong><span>קרן חירום, ביטוח כפול, הר הכסף, בדיקת זכויות: מענק עבודה, מילואים, חיסכון לכל ילד, הנחה בארנונה</span></div><div class="tool-row"><strong><i style="background:#0b63c4"></i>החלטות גדולות</strong><span>משכנתא עם מגבלות בנק ישראל, פירעון מוקדם מול השקעה, שכירות או קנייה, דירה בהנחה, עלות רכב</span></div><div class="tool-row"><strong><i style="background:#b86e00"></i>יום-יום</strong><span>עמלות בנק מול המסלול הבסיסי, יציאה מחובות, יעדי חיסכון, תקציב חופשה, השקעה לילדים</span></div></div>
     </div>
   </section>
@@ -162,14 +190,24 @@
     </div>
   </section>
 
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">שאלות נפוצות</span>
+        <h2>מה שכולם שואלים לפני שמתקינים.</h2>
+      </div>
+      <div class="faq"><details class="faq-item"><summary>זה בטוח לתת לאפליקציה את הסיסמה לבנק?</summary><p>הסיסמה נשמרת רק על המחשב שלכם, מוצפנת ב-AES-256-GCM, ונשלחת רק לאתר של הבנק עצמו בזמן הסנכרון. אין שרת של Penny שהיא עוברת דרכו. אפשר גם להפעיל נעילה עם סיסמה, ואז מפתח ההצפנה עצמו לא נשמר על הדיסק בלי הסיסמה שלכם. הקוד פתוח, כך שכל אחד יכול לבדוק מה הוא עושה.</p></details><details class="faq-item"><summary>לאן הנתונים שלי הולכים?</summary><p>לשום מקום. האפליקציה רצה על המחשב שלכם, מאזינה רק לכתובת המקומית 127.0.0.1, וחוסמת בקשות מאתרים אחרים. נתונים יוצאים רק אם בחרתם בזה: לספק AI בענן אם בחרתם בו (או בכלל לא, עם Ollama או בלי AI), ולטלגרם אם חיברתם בוט.</p></details><details class="faq-item"><summary>מה קורה אם המחשב מתקלקל?</summary><p>אפשר להגדיר גיבוי אוטומטי מוצפן לתיקייה ש-Google Drive, OneDrive, Dropbox או iCloud מסנכרנים. הקובץ נפתח רק עם סיסמת הגיבוי שלכם, ושחזור מחזיר את כל הנתונים, כולל הגישה לחשבונות.</p></details><details class="faq-item"><summary>כמה זה עולה?</summary><p>כלום. Penny היא קוד פתוח ברישיון MIT, בלי מנוי, בלי פרסומות ובלי גרסה בתשלום. AI בענן, אם תבחרו בו, עולה שבריר שקל לסנכרון ישירות לספק.</p></details><details class="faq-item"><summary>זה עובד עם הבנק שלי?</summary><p>סנכרון אוטומטי עובד עם 18 בנקים וחברות אשראי בישראל, וגם בנקאות פתוחה. כל השאר נכנס מקובץ CSV או Excel, או בהדבקה של טבלה.</p></details><details class="faq-item"><summary>זה מותר?</summary><p>משיכת נתונים אוטומטית מאתר הבנק עלולה להפר את תנאי השימוש של הבנק. Penny נועדה לשימוש אישי בחשבונות שלכם בלבד, על המחשב שלכם. לא מפעילים אותה כשירות עבור אחרים.</p></details><details class="faq-item"><summary>יש אפליקציה לטלפון?</summary><p>אין אפליקציה בחנות, אבל אפשר לפתוח את Penny מהטלפון ברשת הביתית (בהפעלה מפורשת ועם נעילה) ולהתקין אותה למסך הבית. יש גם בוט טלגרם עם סיכום שלוש פעמים בשבוע.</p></details><details class="faq-item"><summary>צריך להבין במחשבים?</summary><p>לא. ב-Windows ו-Mac מורידים קובץ התקנה ומפעילים, בלי טרמינל. ב-Windows האפליקציה גם מתעדכנת לבד.</p></details></div>
+    </div>
+  </section>
+
   <section id="install" class="band">
     <div class="wrap">
       <div class="section-head">
         <span class="kicker">התקנה</span>
-        <h2>שלוש דרכים להתחיל.</h2>
+        <h2>ארבע דרכים להתחיל.</h2>
         <p>בפעם הראשונה, תהליך פתיחה קצר מלווה אתכם: פרופיל ופיפ, חיבור בנק או ייבוא קובץ, יעד חודשי ותקציבים.</p>
       </div>
-      <div class="install"><div class="card"><span class="tag">הכי פשוט</span><h3>Windows</h3><p>מורידים את Penny Setup.exe ומריצים. בלי טרמינל ובלי Node.js. לעדכון, מריצים את המתקין החדש.</p><a class="btn btn-solid" href="https://github.com/Sergey-Bar/Penny/releases">להורדה</a></div><div class="card"><span class="tag">מומלץ</span><h3>Docker</h3><p>הכול בקונטיינר מבודד, עם עדכון וחזרה אוטומטית לגרסה הקודמת אם משהו לא תקין.</p><pre>docker compose up -d --build</pre></div><div class="card"><span class="tag">למפתחים</span><h3>מקוד המקור</h3><p>מתקין שירות שרץ תמיד, ואפליקציה בשורת התפריטים ב-macOS וב-Windows.</p><pre>git clone https://github.com/Sergey-Bar/Penny.git
+      <div class="install"><div class="card"><span class="tag">הכי פשוט</span><h3>Windows</h3><p>מורידים את Penny Setup.exe ומריצים. בלי טרמינל ובלי Node.js. מתעדכנת לבד.</p><a class="btn btn-solid" href="https://github.com/Sergey-Bar/Penny/releases/latest">להורדה</a></div><div class="card"><span class="tag">הכי פשוט</span><h3>macOS</h3><p>מורידים את קובץ ה-dmg (ל-Apple silicon או ל-Intel) וגוררים ל-Applications. בפתיחה הראשונה: הגדרות המערכת ← פרטיות ואבטחה ← לפתוח בכל זאת.</p><a class="btn btn-solid" href="https://github.com/Sergey-Bar/Penny/releases/latest">להורדה</a></div><div class="card"><span class="tag">מומלץ</span><h3>Docker</h3><p>הכול בקונטיינר מבודד, עם עדכון וחזרה אוטומטית לגרסה הקודמת אם משהו לא תקין.</p><pre>docker compose up -d --build</pre></div><div class="card"><span class="tag">למפתחים</span><h3>מקוד המקור</h3><p>מתקין שירות שרץ תמיד, ואפליקציה בשורת התפריטים ב-macOS וב-Windows.</p><pre>git clone https://github.com/Sergey-Bar/Penny.git
 cd Penny && npm install
 npm run setup</pre></div></div>
       <p class="note">זה כלי אישי לחשבונות שלכם בלבד. משיכת נתונים אוטומטית מבנקים עלולה להפר את תנאי השימוש שלהם. המחשבונים נותנים הערכה, לא ייעוץ.</p>
@@ -180,13 +218,20 @@ npm run setup</pre></div></div>
 <footer>
   <div class="wrap">
     <span>Penny · קוד פתוח ברישיון MIT</span>
-    <span><a href="https://github.com/Sergey-Bar/Penny">גיטהאב</a> · <a href="https://github.com/Sergey-Bar/Penny/blob/main/SECURITY.md">אבטחה</a> · <a href="en/" hreflang="en" lang="en">English</a></span>
+    <span><a href="https://github.com/Sergey-Bar/Penny">גיטהאב</a> · <a href="https://github.com/Sergey-Bar/Penny/blob/main/SECURITY.md">אבטחה</a> · <a href="privacy.html">פרטיות</a> · <a href="terms.html">תנאי שימוש</a> · <a href="en/" hreflang="en" lang="en">English</a></span>
   </div>
 </footer>
 
 <!-- Pip is BoopFace (MIT), the same face the app uses. Photos: Unsplash free licence. -->
 <script type="module">
   import './assets/boopface/boopface-lite.js';
+  import './os-lead.js';
+  // The tour video loads and plays only once it is on screen, and never by itself when motion is reduced.
+  const tv = document.querySelector('.tour-video video');
+  if (tv && !matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
+    new IntersectionObserver((entries, o) => { if (entries[0].isIntersecting) { tv.play().catch(() => {}); o.disconnect(); } }, { threshold: 0.4 }).observe(tv);
+  }
+  import './gh-stats.js';
   const pip = document.querySelector('boop-face'), say = document.getElementById('pip-say'), moods = [...document.querySelectorAll('[data-pip]')];
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) pip.setAttribute('motion', 'reduce');
   for (const b of moods) b.addEventListener('click', () => {

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Forward } from "@/components/ui/dir-chevron";
+import { Send } from "lucide-react";
 import { SectionShell, SettingCard, SettingList, SettingRow } from "@/components/settings/section-shell";
 
 interface Status { connected: boolean; linked: boolean; username: string | null; code: string | null; hideAmounts: boolean }
@@ -35,7 +36,7 @@ export function TelegramSettings() {
   const s = status.data;
 
   return (
-    <SectionShell title={t("title")} description={t("description")}>
+    <SectionShell title={t("title")} description={t("description")} icon={<Send aria-hidden />}>
       {s?.linked ? (
         <SettingCard title={t("linked", { name: `@${s.username ?? ""}` })} description={t("linkedHint")}>
           <SettingList>

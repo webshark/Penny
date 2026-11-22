@@ -4,16 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Penny · Calm money for your household</title>
-<meta name="description" content="A local-first money app for Israeli households: banks and cards, weekly budgets, tax and pension tools, family profiles. Open source, no cloud.">
+<meta name="description" content="A local-first money app for Israeli households: banks and cards, budgets and money on the table, tax and pension tools, family profiles. Open source, no cloud.">
 <meta property="og:title" content="Penny · Calm money for your household">
 <meta property="og:description" content="Your banks, your budget and your future in one place, on your own computer.">
-<meta property="og:image" content="../assets/shots/en/home.webp">
-<link rel="alternate" hreflang="he" href="../">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%235541cc'/%3E%3Crect x='10' y='12' width='4' height='8' rx='2' fill='white'/%3E%3Crect x='18' y='12' width='4' height='8' rx='2' fill='white'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../styles.css?v=0.2.2">
+<meta property="og:image" content="https://sergey-bar.github.io/Penny/assets/og-en.jpg">
+<link rel="canonical" href="https://sergey-bar.github.io/Penny/en/">
+<link rel="alternate" hreflang="en" href="https://sergey-bar.github.io/Penny/en/">
+<link rel="alternate" hreflang="he" href="https://sergey-bar.github.io/Penny/">
+<link rel="alternate" hreflang="x-default" href="https://sergey-bar.github.io/Penny/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sergey-bar.github.io/Penny/en/">
+<meta property="og:site_name" content="Penny">
+<meta property="og:locale" content="en_US">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#5541cc">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Penny", "applicationCategory": "FinanceApplication", "operatingSystem": "Windows, macOS, Linux", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "ILS"}, "license": "https://opensource.org/licenses/MIT", "url": "https://sergey-bar.github.io/Penny/en/", "image": "https://sergey-bar.github.io/Penny/assets/og-en.jpg", "description": "A local-first money app for Israeli households: banks and cards, budgets and money on the table, tax and pension tools, family profiles. Open source, no cloud.", "inLanguage": "en", "softwareVersion": "0.2.0", "downloadUrl": "https://github.com/Sergey-Bar/Penny/releases/latest"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Is it safe to give the app my bank password?", "acceptedAnswer": {"@type": "Answer", "text": "The password stays on your computer only, encrypted with AES-256-GCM, and is sent only to your bank's own site during a sync. There is no Penny server it passes through. You can also turn on an app lock, and then the encryption key itself isn't stored on disk without your passphrase. The code is open, so anyone can check what it does."}}, {"@type": "Question", "name": "Where does my data go?", "acceptedAnswer": {"@type": "Answer", "text": "Nowhere. The app runs on your computer, listens only on 127.0.0.1, and blocks requests from other sites. Data leaves only if you choose: to a cloud AI provider if you pick one (or none at all, with Ollama or no AI), and to Telegram if you connect a bot."}}, {"@type": "Question", "name": "What if my computer dies?", "acceptedAnswer": {"@type": "Answer", "text": "Set up the automatic encrypted backup to a folder Google Drive, OneDrive, Dropbox or iCloud syncs. The file opens only with your backup passphrase, and a restore brings everything back, including access to your accounts."}}, {"@type": "Question", "name": "How much does it cost?", "acceptedAnswer": {"@type": "Answer", "text": "Nothing. Penny is open source under the MIT license: no subscription, no ads and no paid tier. Cloud AI, if you choose it, costs a fraction of a shekel per sync, paid directly to the provider."}}, {"@type": "Question", "name": "Does it work with my bank?", "acceptedAnswer": {"@type": "Answer", "text": "Automatic sync works with 18 Israeli banks and card companies, plus open banking. Anything else comes in from a CSV or Excel file, or by pasting a table."}}, {"@type": "Question", "name": "Is this allowed?", "acceptedAnswer": {"@type": "Answer", "text": "Scraping a bank's website may break the bank's terms of service. Penny is for personal use with your own accounts, on your own computer. Don't run it as a service for others."}}, {"@type": "Question", "name": "Is there a phone app?", "acceptedAnswer": {"@type": "Answer", "text": "Not in the app stores, but you can open Penny from your phone on your home network (turned on explicitly, behind the app lock) and install it to the home screen. There's also a Telegram bot with a summary three times a week."}}, {"@type": "Question", "name": "Do I need to be technical?", "acceptedAnswer": {"@type": "Answer", "text": "No. On Windows and Mac you download an installer and run it, no terminal. On Windows the app also updates itself."}}]}</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -22,8 +35,8 @@
   <div class="wrap">
     <a class="brand" href="./" aria-label="Penny, home"><span class="brand-mark" aria-hidden="true"><span></span><span></span></span>Penny</a>
     <nav class="nav-links" aria-label="Main">
-      <a class="hide-sm" href="#tour">Product tour</a><a class="hide-sm" href="#mobile">On your phone</a><a class="hide-sm" href="#tools">Tools</a><a class="hide-sm" href="#privacy">Privacy</a>
-      <a href="#install">Install</a>
+      <a href="demo/">Demo</a><a class="hide-sm" href="#tour">Product tour</a><a class="hide-sm" href="#mobile">On your phone</a><a class="hide-sm" href="#tools">Tools</a><a class="hide-sm" href="#privacy">Privacy</a>
+      <a class="hide-sm" href="#faq">FAQ</a><a href="#install">Install</a>
       <a class="lang" href="../" hreflang="he" lang="he">עברית</a>
     </nav>
   </div>
@@ -35,14 +48,16 @@
       <div>
         <span class="eyebrow">Open source · Runs on your computer · Free</span>
         <h1><em>Calm money</em><br>for your household.</h1>
-        <p class="lead">Your banks, your budget and your future in one place. A budget for every week, tools for every big decision, and your data never leaves home.</p>
+        <p class="lead">Your banks, your budget and your future in one place. A budget that shows your pace, tools for every big decision, and your data never leaves home.</p>
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/Sergey-Bar/Penny/releases">Download for Windows</a>
-          <a class="btn btn-ghost" href="https://github.com/Sergey-Bar/Penny">Code on GitHub</a>
+          <a class="btn btn-primary btn-dl" data-os="win" href="https://github.com/Sergey-Bar/Penny/releases/download/v0.2.0/Penny-Setup-0.2.0.exe"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm8.5-1.2L21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zm8.5 0H21V21l-9.5-1.3z"/></svg><span><b>Download for Windows</b><small>Version <bdi dir="ltr">0.2.0</bdi> · <bdi dir="ltr">174 MB</bdi></small></span></a>
+          <a class="btn btn-ghost btn-dl" data-os="mac" href="https://github.com/Sergey-Bar/Penny/releases/download/v0.2.0/Penny-0.2.0-arm64.dmg"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.5 2-3.6 2.1-3.7-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9s-2-.9-3.3-.8a4.9 4.9 0 0 0-4.1 2.5c-1.8 3-.5 7.5 1.2 10 .8 1.2 1.8 2.6 3.1 2.5 1.2-.1 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4a10 10 0 0 0 1.3-2.8 4.3 4.3 0 0 1-2.3-4.2zM14 5.1A4.4 4.4 0 0 0 15 2a4.5 4.5 0 0 0-2.9 1.5 4.2 4.2 0 0 0-1.1 3c1.1.1 2.2-.6 3-1.4z"/></svg><span><b>Download for Mac</b><small>Apple Silicon · <bdi dir="ltr">188 MB</bdi></small></span></a>
         </div>
+        <p class="cta-links"><a data-os="linux" href="#install">Docker for a server or NAS</a><a href="https://github.com/Sergey-Bar/Penny/releases/download/v0.2.0/Penny-0.2.0-x64.dmg">Intel Mac? Download the Intel build</a><a href="https://github.com/Sergey-Bar/Penny/releases">All downloads and versions</a><a href="demo/">Try the demo</a><a href="https://github.com/Sergey-Bar/Penny">Code on GitHub</a></p>
+        <ul class="gh-stats" data-gh-stats hidden><li><span aria-hidden="true">★</span> <b data-gh="stars"></b> stars on GitHub</li><li><span aria-hidden="true">⬇</span> <b data-gh="downloads"></b> downloads</li><li>Version <b data-gh="version"></b></li></ul>
       </div>
       <div class="hero-art">
-        <div class="phone"><img src="../assets/shots/en/m-home.webp" width="560" height="1212" alt="Penny's home screen on a phone: what you'll have left at month end"></div>
+        <div class="phone"><img src="../assets/shots/en/m-home.webp" width="563" height="1218" alt="Penny's home screen on a phone: what you'll have left at month end"></div>
         <div class="pip">
           <div class="pip-stage" role="img" aria-label="Pip, Penny's small companion"><boop-face size="170" color="#30d158"></boop-face></div>
           <h2>Meet Pip</h2>
@@ -54,6 +69,19 @@
     </div>
   </div>
 
+  <section id="new">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">New in 0.2.0</span>
+        <h2>A new look, and smarter even without AI.</h2>
+        <p>The biggest release yet: a redesign from end to end, smart layers that work with no AI and no network, and end-to-end tests on a simulated bank.</p>
+      </div>
+      <figure class="tour-video"><video src="../assets/tour-en.webm" poster="../assets/shots/en/home.webp" width="1280" height="800" controls muted loop playsinline preload="none" aria-label="A 30-second walk through the app with a sample household"></video></figure>
+      <div class="grid"><div class="card"><div class="icon c1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d="M13 9h5M13 13h5"/></svg></div><h3>A new look</h3><p>Light, dark or follow the device. A side menu that stays put, one top bar with search and add, and soft motion for every open and close.</p></div><div class="card"><div class="icon c2" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></svg></div><h3>Tables, not tiles</h3><p>Transactions and budget open straight on a table: every filter in one bar, and budgets edited in place with the month's pace marked.</p></div><div class="card"><div class="icon c3" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg></div><h3>An analytics hub</h3><p>One reports menu, a pivot table of spending by group and month, and net worth over time.</p></div><div class="card"><div class="icon c4" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="5"/><path d="M12 6V3"/><path d="M9 12v2M15 12v2"/></svg></div><h3>Pip comes alive</h3><p>Waits while something saves, nods when it lands, types along with you and follows the pointer. Every profile has its own picture.</p></div><div class="card"><div class="icon c1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5"/><path d="M18.1 10.4a5 5 0 1 1-6.7 6.7"/><path d="M8 6v4h2"/></svg></div><h3>Money on the table</h3><p>One yearly figure for everything you could save: high fund fees, overlapping insurance, fees, overdraft interest and idle cash. Each with its next step.</p></div><div class="card"><div class="icon c2" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10l-5.1 3.3L16.5 20 12 16.3 7.5 20l1.6-6.7L4 10l6.1-1.2z"/></svg></div><h3>Categorizes itself, no AI</h3><p>A dictionary of about 200 Israeli merchants and a memory of what you taught it. AI only for what is left, if at all.</p></div><div class="card"><div class="icon c3" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></div><h3>Why spending changed</h3><p>This month against the same days last month or last year, per merchant: price, volume, new or one-off.</p></div><div class="card"><div class="icon c4" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14a6 6 0 0 1 3.5 6"/></svg></div><h3>Splits, envelopes, credit score</h3><p>Who owes you what, how much of your income already has a job, and your credit score over time.</p></div><div class="card"><div class="icon c5" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div><h3>Tax without the hunt</h3><p>Donations found for the 35% section 46 credit, credit points, and a nudge when a refund is likely.</p></div><div class="card"><div class="icon c6" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div><h3>Updates itself</h3><p>On Windows the new version downloads and is verified by itself, and installs when you restart. Plus a Telegram summary three times a week.</p></div></div>
+      <p class="new-links"><a class="btn btn-primary" href="demo/">Try the demo</a> <a class="btn btn-ghost" href="https://github.com/Sergey-Bar/Penny/blob/main/CHANGELOG.md">Everything that changed</a></p>
+    </div>
+  </section>
+
   <section id="tour">
     <div class="wrap">
       <div class="section-head">
@@ -64,12 +92,12 @@
       <div class="split">
         <div>
           <span class="kicker">Home</span>
-          <h3>One clear number: what you'll have left</h3>
-          <p>Home answers the question that matters first: how much money will be left at month end. Simple mode shows just that, and Advanced mode opens the full picture.</p>
+          <h3>The whole household at a glance</h3>
+          <p>A dashboard of tiles you can show or hide: expected balance, money on the table, cash flow, spending and who spent what. And a calm Focus screen for when you just want the bottom line.</p>
           <ul><li>What you'll have left, and spending so far against the budget</li><li>Move between the months of the year in one click</li><li>Add a cash transaction in a second</li><li>Pip shows when something needs care, with the next step underneath</li></ul>
         </div>
         <div>
-          <a class="shot" href="../assets/shots/en/home.webp" title="Open the screenshot full size"><img src="../assets/shots/en/home.webp" width="1400" height="802" alt="Home on a computer" loading="lazy"></a>
+          <a class="shot" href="../demo/en/home.webp" title="Open the screenshot full size"><img src="../demo/en/home.webp" width="1440" height="900" alt="Home on a computer" loading="lazy"></a>
         </div>
       </div>
       <div class="split flip">
@@ -80,7 +108,7 @@
           <ul><li>Search, filter by category, splits and tags</li><li>A "To review" queue for new transactions, with settle-ups kept apart</li><li>An AI of your choice sorts transactions, or no AI at all</li><li>Automatic rules for merchants that keep coming back</li></ul>
         </div>
         <div>
-          <a class="shot" href="../assets/shots/en/transactions.webp" title="Open the screenshot full size"><img src="../assets/shots/en/transactions.webp" width="1400" height="875" alt="Transactions grouped by week" loading="lazy"></a>
+          <a class="shot" href="../demo/en/transactions.webp" title="Open the screenshot full size"><img src="../demo/en/transactions.webp" width="1440" height="900" alt="Transactions grouped by week" loading="lazy"></a>
         </div>
       </div>
       <div class="split">
@@ -91,7 +119,7 @@
           <ul><li>Where the money goes, by category</li><li>50/30/20 view</li><li>Summary by month, quarter, half-year and year, with savings rate</li><li>A calendar of expected and recurring charges</li></ul>
         </div>
         <div>
-          <a class="shot" href="../assets/shots/en/budget.webp" title="Open the screenshot full size"><img src="../assets/shots/en/budget.webp" width="1400" height="969" alt="Budget dashboard" loading="lazy"></a><div class="pair"><figure><a class="shot" href="../assets/shots/en/summary.webp" title="Open the screenshot full size"><img src="../assets/shots/en/summary.webp" width="1400" height="825" alt="Quarterly summary: income, spending and savings rate" loading="lazy"></a><figcaption>Quarterly summary: income, spending and savings rate</figcaption></figure><figure><a class="shot" href="../assets/shots/en/ahead.webp" title="Open the screenshot full size"><img src="../assets/shots/en/ahead.webp" width="1400" height="916" alt="What's ahead: upcoming charges on a calendar" loading="lazy"></a><figcaption>What's ahead: upcoming charges on a calendar</figcaption></figure></div>
+          <a class="shot" href="../demo/en/budget.webp" title="Open the screenshot full size"><img src="../demo/en/budget.webp" width="1440" height="900" alt="Budget dashboard" loading="lazy"></a><div class="pair"><figure><a class="shot" href="../assets/shots/en/summary.webp" title="Open the screenshot full size"><img src="../assets/shots/en/summary.webp" width="1440" height="900" alt="Quarterly summary: income, spending and savings rate" loading="lazy"></a><figcaption>Quarterly summary: income, spending and savings rate</figcaption></figure><figure><a class="shot" href="../assets/shots/en/ahead.webp" title="Open the screenshot full size"><img src="../assets/shots/en/ahead.webp" width="1440" height="900" alt="What's ahead: upcoming charges on a calendar" loading="lazy"></a><figcaption>What's ahead: upcoming charges on a calendar</figcaption></figure></div>
         </div>
       </div>
       <div class="split flip">
@@ -102,7 +130,7 @@
           <ul><li>Assets, liabilities and net worth</li><li>Allocation by type and currency, compared with the S&P 500 and TA-125</li><li>Financial-independence calculator with life events and goals</li><li>Checklists by life stage, linking to official sources</li></ul>
         </div>
         <div>
-          <a class="shot" href="../assets/shots/en/investments.webp" title="Open the screenshot full size"><img src="../assets/shots/en/investments.webp" width="1400" height="1046" alt="Investments and net worth" loading="lazy"></a><div class="pair"><figure><a class="shot" href="../assets/shots/en/fi.webp" title="Open the screenshot full size"><img src="../assets/shots/en/fi.webp" width="1400" height="1112" alt="Financial independence: how long to go" loading="lazy"></a><figcaption>Financial independence: how long to go</figcaption></figure><figure><a class="shot" href="../assets/shots/en/life.webp" title="Open the screenshot full size"><img src="../assets/shots/en/life.webp" width="1400" height="941" alt="Life stages: what's relevant to you now" loading="lazy"></a><figcaption>Life stages: what's relevant to you now</figcaption></figure></div>
+          <a class="shot" href="../assets/shots/en/investments.webp" title="Open the screenshot full size"><img src="../assets/shots/en/investments.webp" width="1440" height="900" alt="Investments and net worth" loading="lazy"></a><div class="pair"><figure><a class="shot" href="../assets/shots/en/fi.webp" title="Open the screenshot full size"><img src="../assets/shots/en/fi.webp" width="1440" height="900" alt="Financial independence: how long to go" loading="lazy"></a><figcaption>Financial independence: how long to go</figcaption></figure><figure><a class="shot" href="../assets/shots/en/life.webp" title="Open the screenshot full size"><img src="../assets/shots/en/life.webp" width="1440" height="900" alt="Life stages: what's relevant to you now" loading="lazy"></a><figcaption>Life stages: what's relevant to you now</figcaption></figure></div>
         </div>
       </div>
     </div>
@@ -115,11 +143,11 @@
           <span class="kicker">On your phone</span>
           <h3>Comfortable in one hand, like an app.</h3>
           <p>Penny adapts to phone, tablet and desktop. On a phone you get a bottom bar, a floating add button and screens that scroll under your thumb. Phone access goes over your home network, only after you turn it on, with a code.</p>
-          <ul><li>Five tabs at the bottom: Home, Transactions, Budget, Future, Tools</li><li>Dark and light themes</li><li>Installs as an app on your phone's home screen</li></ul>
+          <ul><li>Five tabs at the bottom: Dashboard, Transactions, Budget, Accounts and Menu</li><li>Dark and light themes</li><li>Installs as an app on your phone's home screen</li></ul>
         </div>
         <img class="photo" src="../assets/people-hero.webp" width="1400" height="788" alt="A couple sitting in their kitchen, looking at a screen together" loading="lazy">
       </div>
-      <div class="phones" tabindex="0"><figure><div class="phone"><img src="../assets/shots/en/m-home.webp" width="560" height="1212" alt="Home" loading="lazy"></div><figcaption>Home</figcaption></figure><figure><div class="phone"><img src="../assets/shots/en/m-transactions.webp" width="560" height="1212" alt="Transactions" loading="lazy"></div><figcaption>Transactions</figcaption></figure><figure><div class="phone"><img src="../assets/shots/en/m-budget.webp" width="560" height="1212" alt="Budget" loading="lazy"></div><figcaption>Budget</figcaption></figure><figure><div class="phone"><img src="../assets/shots/en/m-future.webp" width="560" height="1212" alt="Future" loading="lazy"></div><figcaption>Future</figcaption></figure><figure><div class="phone"><img src="../assets/shots/en/m-more.webp" width="560" height="1212" alt="Tools" loading="lazy"></div><figcaption>Tools</figcaption></figure><figure><div class="phone"><img src="../assets/phone-dark.webp" width="780" height="1688" alt="Dark theme (Hebrew)" loading="lazy"></div><figcaption>Dark theme (Hebrew)</figcaption></figure></div>
+      <div class="phones" tabindex="0"><figure><div class="phone"><img src="../assets/shots/en/m-home.webp" width="563" height="1218" alt="Home" loading="lazy"></div><figcaption>Home</figcaption></figure><figure><div class="phone"><img src="../assets/shots/en/m-transactions.webp" width="563" height="1218" alt="Transactions" loading="lazy"></div><figcaption>Transactions</figcaption></figure><figure><div class="phone"><img src="../assets/shots/en/m-budget.webp" width="563" height="1218" alt="Budget" loading="lazy"></div><figcaption>Budget</figcaption></figure><figure><div class="phone"><img src="../assets/shots/en/m-future.webp" width="563" height="1218" alt="Future" loading="lazy"></div><figcaption>Future</figcaption></figure><figure><div class="phone"><img src="../assets/shots/en/m-more.webp" width="563" height="1218" alt="Tools" loading="lazy"></div><figcaption>Tools</figcaption></figure><figure><div class="phone"><img src="../assets/phone-dark.webp" width="780" height="1688" alt="Dark theme (Hebrew)" loading="lazy"></div><figcaption>Dark theme (Hebrew)</figcaption></figure></div>
     </div>
   </section>
 
@@ -144,7 +172,7 @@
         <h2>The answers that actually matter here.</h2>
         <p>More than 25 calculators and guided tools, a knowledge centre and periodic check-ins. Each tool shows which year its figures are valid for, and the code cites the source.</p>
       </div>
-      <div class="gallery"><figure><a class="shot" href="../assets/shots/en/calculators.webp" title="Open the screenshot full size"><img src="../assets/shots/en/calculators.webp" width="1400" height="593" alt="Calculators" loading="lazy"></a><h3>Calculators</h3><figcaption>Grouped by topic: saving and debt, home, car and pay.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/mortgage.webp" title="Open the screenshot full size"><img src="../assets/shots/en/mortgage.webp" width="1400" height="1118" alt="Mortgage" loading="lazy"></a><h3>Mortgage</h3><figcaption>A mix of tracks under Bank of Israel rules, with monthly payment and total cost.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/learn.webp" title="Open the screenshot full size"><img src="../assets/shots/en/learn.webp" width="1400" height="893" alt="Knowledge centre" loading="lazy"></a><h3>Knowledge centre</h3><figcaption>11 short guides in Hebrew and English, from emergency fund to retirement.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/wellbeing.webp" title="Open the screenshot full size"><img src="../assets/shots/en/wellbeing.webp" width="1400" height="985" alt="Well-being check" loading="lazy"></a><h3>Well-being check</h3><figcaption>A short questionnaire on the CFPB financial well-being scale, tracked across quarters.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/recap.webp" title="Open the screenshot full size"><img src="../assets/shots/en/recap.webp" width="1400" height="560" alt="Monthly recap" loading="lazy"></a><h3>Monthly recap</h3><figcaption>Last month in a few slides, with an option to save as an image.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/a11y.webp" title="Open the screenshot full size"><img src="../assets/shots/en/a11y.webp" width="1400" height="447" alt="Accessibility" loading="lazy"></a><h3>Accessibility</h3><figcaption>Text size, contrast, readable font, paused animations and more, per profile.</figcaption></figure></div>
+      <div class="gallery"><figure><a class="shot" href="../assets/shots/en/calculators.webp" title="Open the screenshot full size"><img src="../assets/shots/en/calculators.webp" width="1440" height="900" alt="Calculators" loading="lazy"></a><h3>Calculators</h3><figcaption>Grouped by topic: saving and debt, home, car and pay.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/mortgage.webp" title="Open the screenshot full size"><img src="../assets/shots/en/mortgage.webp" width="1440" height="900" alt="Mortgage" loading="lazy"></a><h3>Mortgage</h3><figcaption>A mix of tracks under Bank of Israel rules, with monthly payment and total cost.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/learn.webp" title="Open the screenshot full size"><img src="../assets/shots/en/learn.webp" width="1440" height="900" alt="Knowledge centre" loading="lazy"></a><h3>Knowledge centre</h3><figcaption>11 short guides in Hebrew and English, from emergency fund to retirement.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/wellbeing.webp" title="Open the screenshot full size"><img src="../assets/shots/en/wellbeing.webp" width="1440" height="900" alt="Well-being check" loading="lazy"></a><h3>Well-being check</h3><figcaption>A short questionnaire on the CFPB financial well-being scale, tracked across quarters.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/recap.webp" title="Open the screenshot full size"><img src="../assets/shots/en/recap.webp" width="1440" height="900" alt="Monthly recap" loading="lazy"></a><h3>Monthly recap</h3><figcaption>Last month in a few slides, with an option to save as an image.</figcaption></figure><figure><a class="shot" href="../assets/shots/en/a11y.webp" title="Open the screenshot full size"><img src="../assets/shots/en/a11y.webp" width="1440" height="900" alt="Accessibility" loading="lazy"></a><h3>Accessibility</h3><figcaption>Text size, contrast, readable font, paused animations and more, per profile.</figcaption></figure></div>
       <div class="tools"><div class="tool-row"><strong><i style="background:#c8384f"></i>Tax</strong><span>Credit points and tax refunds up to 6 years back, tax-benefit deposits to pension and study fund, loss offset, net from gross</span></div><div class="tool-row"><strong><i style="background:#5541cc"></i>Pension and retirement</strong><span>Your fees against the market, clearing-house report guide, track choice, annuity vs lump sum, severance when changing jobs, early-retirement bridge</span></div><div class="tool-row"><strong><i style="background:#2b8a4e"></i>Safety net</strong><span>Emergency fund, double insurance, forgotten money, benefits check: work grant, reserve duty, child savings, arnona discounts</span></div><div class="tool-row"><strong><i style="background:#0b63c4"></i>Big decisions</strong><span>Mortgage with Bank of Israel rules, prepay vs invest, rent vs buy, discounted home, car cost</span></div><div class="tool-row"><strong><i style="background:#b86e00"></i>Everyday</strong><span>Bank fees against the basic track, getting out of debt, savings goals, vacation budget, investing for kids</span></div></div>
     </div>
   </section>
@@ -162,14 +190,24 @@
     </div>
   </section>
 
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">FAQ</span>
+        <h2>What everyone asks before installing.</h2>
+      </div>
+      <div class="faq"><details class="faq-item"><summary>Is it safe to give the app my bank password?</summary><p>The password stays on your computer only, encrypted with AES-256-GCM, and is sent only to your bank&#x27;s own site during a sync. There is no Penny server it passes through. You can also turn on an app lock, and then the encryption key itself isn&#x27;t stored on disk without your passphrase. The code is open, so anyone can check what it does.</p></details><details class="faq-item"><summary>Where does my data go?</summary><p>Nowhere. The app runs on your computer, listens only on 127.0.0.1, and blocks requests from other sites. Data leaves only if you choose: to a cloud AI provider if you pick one (or none at all, with Ollama or no AI), and to Telegram if you connect a bot.</p></details><details class="faq-item"><summary>What if my computer dies?</summary><p>Set up the automatic encrypted backup to a folder Google Drive, OneDrive, Dropbox or iCloud syncs. The file opens only with your backup passphrase, and a restore brings everything back, including access to your accounts.</p></details><details class="faq-item"><summary>How much does it cost?</summary><p>Nothing. Penny is open source under the MIT license: no subscription, no ads and no paid tier. Cloud AI, if you choose it, costs a fraction of a shekel per sync, paid directly to the provider.</p></details><details class="faq-item"><summary>Does it work with my bank?</summary><p>Automatic sync works with 18 Israeli banks and card companies, plus open banking. Anything else comes in from a CSV or Excel file, or by pasting a table.</p></details><details class="faq-item"><summary>Is this allowed?</summary><p>Scraping a bank&#x27;s website may break the bank&#x27;s terms of service. Penny is for personal use with your own accounts, on your own computer. Don&#x27;t run it as a service for others.</p></details><details class="faq-item"><summary>Is there a phone app?</summary><p>Not in the app stores, but you can open Penny from your phone on your home network (turned on explicitly, behind the app lock) and install it to the home screen. There&#x27;s also a Telegram bot with a summary three times a week.</p></details><details class="faq-item"><summary>Do I need to be technical?</summary><p>No. On Windows and Mac you download an installer and run it, no terminal. On Windows the app also updates itself.</p></details></div>
+    </div>
+  </section>
+
   <section id="install" class="band">
     <div class="wrap">
       <div class="section-head">
         <span class="kicker">Install</span>
-        <h2>Three ways to start.</h2>
+        <h2>Four ways to start.</h2>
         <p>The first time, a short onboarding walks you through it: profile and Pip, connect a bank or import a file, a monthly target and budgets.</p>
       </div>
-      <div class="install"><div class="card"><span class="tag">Easiest</span><h3>Windows</h3><p>Download Penny Setup.exe and run it. No terminal, no Node.js. To update, run the new installer.</p><a class="btn btn-solid" href="https://github.com/Sergey-Bar/Penny/releases">Download</a></div><div class="card"><span class="tag">Recommended</span><h3>Docker</h3><p>Everything in an isolated container, with updates that roll back automatically if something's wrong.</p><pre>docker compose up -d --build</pre></div><div class="card"><span class="tag">For developers</span><h3>From source</h3><p>Installs an always-on service and a menu bar app on macOS and Windows.</p><pre>git clone https://github.com/Sergey-Bar/Penny.git
+      <div class="install"><div class="card"><span class="tag">Easiest</span><h3>Windows</h3><p>Download Penny Setup.exe and run it. No terminal, no Node.js. It updates itself.</p><a class="btn btn-solid" href="https://github.com/Sergey-Bar/Penny/releases/latest">Download</a></div><div class="card"><span class="tag">Easiest</span><h3>macOS</h3><p>Download the .dmg (Apple silicon or Intel) and drag Penny to Applications. First open: System Settings → Privacy &amp; Security → Open Anyway.</p><a class="btn btn-solid" href="https://github.com/Sergey-Bar/Penny/releases/latest">Download</a></div><div class="card"><span class="tag">Recommended</span><h3>Docker</h3><p>Everything in an isolated container, with updates that roll back automatically if something's wrong.</p><pre>docker compose up -d --build</pre></div><div class="card"><span class="tag">For developers</span><h3>From source</h3><p>Installs an always-on service and a menu bar app on macOS and Windows.</p><pre>git clone https://github.com/Sergey-Bar/Penny.git
 cd Penny && npm install
 npm run setup</pre></div></div>
       <p class="note">A personal tool for your own accounts only. Automated access to banks may violate their terms of service. Calculators give estimates, not advice.</p>
@@ -180,13 +218,20 @@ npm run setup</pre></div></div>
 <footer>
   <div class="wrap">
     <span>Penny · Open source under the MIT license</span>
-    <span><a href="https://github.com/Sergey-Bar/Penny">GitHub</a> · <a href="https://github.com/Sergey-Bar/Penny/blob/main/SECURITY.md">Security</a> · <a href="../" hreflang="he" lang="he">עברית</a></span>
+    <span><a href="https://github.com/Sergey-Bar/Penny">GitHub</a> · <a href="https://github.com/Sergey-Bar/Penny/blob/main/SECURITY.md">Security</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="../" hreflang="he" lang="he">עברית</a></span>
   </div>
 </footer>
 
 <!-- Pip is BoopFace (MIT), the same face the app uses. Photos: Unsplash free licence. -->
 <script type="module">
   import './../assets/boopface/boopface-lite.js';
+  import '../os-lead.js';
+  // The tour video loads and plays only once it is on screen, and never by itself when motion is reduced.
+  const tv = document.querySelector('.tour-video video');
+  if (tv && !matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
+    new IntersectionObserver((entries, o) => { if (entries[0].isIntersecting) { tv.play().catch(() => {}); o.disconnect(); } }, { threshold: 0.4 }).observe(tv);
+  }
+  import '../gh-stats.js';
   const pip = document.querySelector('boop-face'), say = document.getElementById('pip-say'), moods = [...document.querySelectorAll('[data-pip]')];
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) pip.setAttribute('motion', 'reduce');
   for (const b of moods) b.addEventListener('click', () => {

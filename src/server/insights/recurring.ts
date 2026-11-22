@@ -28,6 +28,8 @@ export interface Series {
   lastDate: string;
   status: "candidate" | "suggested";
   priceChange?: { from: number; to: number; date: string };
+  /** Days from the latest charge to the card bill it landed on; set for card charges so forecasts bill it right. */
+  billingLagDays?: number;
 }
 
 const CADENCES: { name: Cadence; min: number; max: number }[] = [
@@ -52,7 +54,9 @@ export function detectRecurring(txns: RecurringTxn[]): Series[] {
   for (const t of txns) {
     if (!(t.amount < 0)) continue;
     const key = `${t.account}|${t.merchant}|${t.currency}`;
-    groups.set(key, [...(groups.get(key) ?? []), t]);
+    const list = groups.get(key);
+    if (list) list.push(t);
+    else groups.set(key, [t]);
   }
 
   const out: Series[] = [];

@@ -108,6 +108,23 @@ export function getCategoryTree(
   return { tree, orphans };
 }
 
+/** Rename and/or recolour. Names are unique per workspace, so a taken name is reported rather than thrown. */
+export function updateCategoryLook(
+  workspaceId: number,
+  id: number,
+  fields: { name?: string; color?: string }
+): "ok" | "not-found" | "duplicate" {
+  const db = getDb();
+  if (fields.name !== undefined) {
+    const taken = db.prepare("SELECT id FROM categories WHERE workspace_id = ? AND name = ? COLLATE NOCASE AND id != ?").get(workspaceId, fields.name, id);
+    if (taken) return "duplicate";
+  }
+  const result = db
+    .prepare("UPDATE categories SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE workspace_id = ? AND id = ?")
+    .run(fields.name ?? null, fields.color ?? null, workspaceId, id);
+  return result.changes > 0 ? "ok" : "not-found";
+}
+
 export function updateCategoryDescription(
   workspaceId: number,
   id: number,

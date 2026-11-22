@@ -138,3 +138,16 @@ export function fiOdds(
   };
   return { probability: results.filter((y) => y <= years).length / runs, p10: at(0.1), p50: at(0.5), p90: at(0.9) };
 }
+/**
+ * FIRE variants: the target and years to it for a lean life (70% of today's spending),
+ * today's life, and a fat one (150%); and Coast FIRE, the sum that grows alone to today's target by retirement.
+ */
+export function fireVariants(i: { monthlySpend: number; savings: number; monthlySaving: number; annualReturn: number; withdrawalRate: number; yearsToRetirement: number | null }) {
+  const variant = (share: number) => {
+    const target = fiNumber(i.monthlySpend * share * 12, i.withdrawalRate);
+    return { target, years: yearsToTarget(i.savings, Math.max(0, i.monthlySaving), i.annualReturn, target) };
+  };
+  const regular = variant(1);
+  const coast = i.yearsToRetirement == null ? null : coastCheck(i.savings, i.annualReturn, i.yearsToRetirement, regular.target);
+  return { lean: variant(0.7), regular, fat: variant(1.5), coast };
+}

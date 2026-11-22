@@ -16,6 +16,9 @@ export interface Anomaly {
   merchant?: string;
   category?: string;
   amount?: number;
+  /** Category spike: the usual month before. Duplicate: how many times. */
+  usual?: number;
+  count?: number;
 }
 
 const SPIKE_RATIO = 1.5;
@@ -40,7 +43,7 @@ export function findAnomalies(txns: AnomalyTxn[], today: string): Anomaly[] {
   for (const [category, { now, before }] of byCat) {
     const mean = before / 3;
     if (mean > 0 && now >= SPIKE_MIN && now > SPIKE_RATIO * mean) {
-      out.push({ type: "category_spike", category, amount: now, detail: `${category}: ${Math.round(now)} this month vs ${Math.round(mean)} usual` });
+      out.push({ type: "category_spike", category, amount: now, usual: mean, detail: `${category}: ${Math.round(now)} this month vs ${Math.round(mean)} usual` });
     }
   }
 
@@ -63,7 +66,7 @@ export function findAnomalies(txns: AnomalyTxn[], today: string): Anomaly[] {
   for (const [key, n] of counts) {
     if (n < 2) continue;
     const [merchant, amount] = key.split("|");
-    out.push({ type: "duplicate_charge", merchant, amount: -Number(amount), detail: `${merchant} charged ${n}x ${-Number(amount)} on the same day` });
+    out.push({ type: "duplicate_charge", merchant, amount: -Number(amount), count: n, detail: `${merchant} charged ${n}x ${-Number(amount)} on the same day` });
   }
   return out;
 }

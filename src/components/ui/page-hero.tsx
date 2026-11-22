@@ -5,10 +5,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { InfoTip } from "@/components/ui/info-tip";
-import { ArrowDown, ArrowUp, ArrowLeftRight, CalendarClock, Flag, Landmark, LayoutGrid, PieChart, Repeat, RotateCw, Sprout, Target } from "lucide-react";
-import { getAssets, getPlan, getSuggestions, type TransactionsSummary } from "@/lib/api";
-import { shekels, signedShekels } from "@/lib/money";
+import { CalendarClock, Flag, Landmark, LayoutGrid, PieChart, Repeat, RotateCw, Sprout, Target } from "lucide-react";
+import { getAssets, getCashflowHealth, getPlan, getSuggestions } from "@/lib/api";
+import { shekels } from "@/lib/money";
 import { Sparkline } from "@/components/ui/sparkline";
+import { StatStrip, type StatStripItem } from "@/components/ui/stat-strip";
 import { MonthNav, MonthStrip } from "@/components/ui/month-nav";
 import { usePathname } from "next/navigation";
 import { usePlan } from "@/hooks/use-plan";
@@ -16,13 +17,17 @@ import { wantsExplanations } from "@/lib/plan";
 import { pagePurposeKey } from "@/lib/orientation";
 
 /** Purple summary card that opens a page: one big number, one short sentence. Same look as the budget overview. */
-export function PageHero({ title, icon, meta, month, aside, label, value, sentence, loading, error, onRetry, children }: {
+export function PageHero({ title, icon, meta, month, aside, label, value, sentence, stats, loading, error, onRetry, children, compact = false }: {
   title: string; icon: React.ReactNode; meta?: React.ReactNode; label?: React.ReactNode; value?: React.ReactNode; sentence?: React.ReactNode; children?: React.ReactNode;
+  /** The page's numbers, as a hairline strip at the card's foot: one comparison instead of a card each. */
+  stats?: StatStripItem[];
   /** The page's month ("YYYY-MM"): the hero shows ‹ month › in its top row and a 12-month strip at its foot. */
   month?: { value: string; onChange: (m: string) => void };
   /** Shown beside the hero's figure, at the end side (visual left in Hebrew); shrinks on phones. */
   aside?: React.ReactNode;
   loading?: boolean; error?: boolean; onRetry?: () => void;
+  /** A slim header for pages whose content is a list (transactions): smaller figure, no month strip. */
+  compact?: boolean;
 }) {
   const t = useTranslations("pageHero");
   // The page title is hidden when a hero opens the page, so the page's "what is this for" (i) lives here.
@@ -31,29 +36,16 @@ export function PageHero({ title, icon, meta, month, aside, label, value, senten
   const { plan } = usePlan();
   const key = wantsExplanations(plan) ? pagePurposeKey(pathname) : null;
   const purpose = key && tPurpose.has(key) ? tPurpose(key) : null;
-  return <section className="studio-overview page-hero" aria-label={title} aria-busy={loading || undefined}>
+  return <section className={`studio-overview page-hero${compact ? " page-hero-compact" : ""}`} aria-label={title} aria-busy={loading || undefined}>
     <div className="studio-overview-top"><span className="studio-eyebrow">{icon}{title}{purpose && <InfoTip text={purpose} className="-my-3 text-current hover:bg-white/10" />}</span>{month ? <MonthNav value={month.value} onChange={month.onChange} /> : meta && <span className="studio-month">{meta}</span>}</div>
     <div className="hero-with-aside"><div className="studio-balance page-hero-body">
       {error ? <><p>{t("error")}</p>{onRetry && <button type="button" className="studio-inline-link" onClick={onRetry}>{t("retry")}<RotateCw size={15} aria-hidden="true" /></button>}</>
       : loading ? <><p className="page-hero-skel" style={{ width: "30%" }} /><div className="page-hero-skel studio-amount" style={{ width: "55%" }} /><p className="page-hero-skel" style={{ width: "70%" }} /></>
       : <><p>{label}</p><div className="studio-amount figure"><bdi>{value}</bdi></div><p className="studio-budget-context">{sentence}</p>{children}</>}
     </div>{aside && <div className="hero-aside">{aside}</div>}</div>
-    {month && <MonthStrip value={month.value} onChange={month.onChange} />}
+    {stats && stats.length > 0 && <StatStrip tone="hero" items={stats} className="mt-5" />}
+    {month && !compact && <MonthStrip value={month.value} onChange={month.onChange} />}
   </section>;
-}
-
-export function TransactionsHero({ summary, loading, error, onRetry, meta, month }: { summary?: TransactionsSummary; loading: boolean; error: boolean; onRetry: () => void; meta: string; month?: { value: string; onChange: (m: string) => void } }) {
-  const t = useTranslations("pageHero");
-  const tn = useTranslations("nav");
-  const locale = useLocale();
-  const s = summary;
-  const over = (s?.net ?? 0) < 0;
-  const Arrow = over ? ArrowDown : ArrowUp;
-  // "Left over" / "Overspent" instead of "income minus expenses"; the (i) keeps the formula. Light tints match .studio-status on the purple card.
-  return <PageHero title={tn("transactions")} icon={<ArrowLeftRight size={15} aria-hidden="true" />} meta={meta} month={month} loading={loading} error={error} onRetry={onRetry}
-    label={s && <span className="inline-flex items-center gap-1"><Arrow size={15} aria-hidden="true" />{t(over ? "txOver" : "txLeft", { month: meta })}<InfoTip text={t("txNetInfo")} className="-my-3 text-current hover:bg-white/10" /></span>}
-    value={s && <span className={over ? "text-[#ffbac6]" : "text-[#b5e7c8]"}>{signedShekels(s.net, locale)}</span>}
-    sentence={s && <>{t("txSentence", { income: signedShekels(Math.abs(s.income.total), locale), expense: signedShekels(-Math.abs(s.expense.total), locale) })}{s.pendingReviewCount > 0 && <> · {t("txReview", { count: s.pendingReviewCount })}</>}</>} />;
 }
 
 export function FutureHero() {
@@ -67,40 +59,47 @@ export function FutureHero() {
   const first = hist[0];
   const change = tot && hist.length > 1 ? tot.netWorth - first.netWorth : null;
   const since = change != null && <><bdi className="font-semibold tabular-nums">{shekels(change, locale)}</bdi> {ti("sinceFirst", { date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${first.date}T12:00:00`)) })}</>;
-  const stat = (label: string, v: number, hint?: string) => <div title={hint}><dt className="text-caption opacity-75">{label}</dt><dd className="font-semibold tabular-nums"><bdi>{shekels(v, locale)}</bdi></dd></div>;
+  const fact = (key: string, label: string, v: number, title?: string): StatStripItem => ({
+    key, label, title, value: <bdi>{shekels(v, locale)}</bdi>,
+  });
   return <PageHero title={tn("future")} icon={<Flag size={15} aria-hidden="true" />} loading={q.isPending} error={q.isError} onRetry={() => q.refetch()}
     label={t("netWorth")} value={tot && shekels(tot.netWorth, locale)}
     sentence={tot && (q.data!.assets.length ? <>{t("futureSentence", { assets: shekels(tot.assets, locale), debts: shekels(tot.liabilities, locale) })}{since && <> · {since}</>}</> : t("futureEmpty"))}>
     {tot && q.data!.assets.length > 0 && <>
       {/* 0-1 points: no trend to draw, so the chart is hidden */}
       {hist.length > 1 && <Sparkline values={hist.map((h) => h.netWorth)} color="currentColor" label={`${ti("netWorthTrend")}: ${shekels(first.netWorth, locale)} → ${shekels(tot.netWorth, locale)}`} fitToRange className="mt-3 h-12 w-full opacity-70" />}
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-footnote sm:grid-cols-4">
-        {stat(ti("totalAssets"), tot.assets)}
-        {stat(ti("totalLiabilities"), -tot.liabilities)}
-        {stat(ti("deferredTax"), -tot.deferredTax, ti("deferredTaxHint"))}
-        {stat(ti("liquidNetWorth"), tot.liquidNetWorth, ti("liquidNetWorthHint"))}
-      </dl>
+      <StatStrip
+        tone="hero"
+        columns={4}
+        className="mt-4"
+        items={[
+          fact("assets", ti("totalAssets"), tot.assets),
+          fact("liabilities", ti("totalLiabilities"), -tot.liabilities),
+          fact("tax", ti("deferredTax"), -tot.deferredTax, ti("deferredTaxHint")),
+          fact("liquid", ti("liquidNetWorth"), tot.liquidNetWorth, ti("liquidNetWorthHint")),
+        ]}
+      />
     </>}
   </PageHero>;
 }
 
-export function MoreHero() {
+export function MoreHero({ aside }: { aside?: React.ReactNode }) {
   const t = useTranslations("pageHero");
   const tn = useTranslations("nav");
   const q = useQuery({ queryKey: ["suggestions"], queryFn: getSuggestions });
   const n = q.data?.suggestions.length ?? 0;
-  return <PageHero title={tn("more")} icon={<LayoutGrid size={15} aria-hidden="true" />} loading={q.isPending} error={q.isError} onRetry={() => q.refetch()}
+  return <PageHero title={tn("more")} icon={<LayoutGrid size={15} aria-hidden="true" />} loading={q.isPending} error={q.isError} onRetry={() => q.refetch()} aside={aside}
     label={t("moreLabel")} value={n} sentence={n ? t("moreSentence") : t("moreEmpty")} />;
 }
 
 type HeroState = { loading: boolean; error: boolean; onRetry: () => void };
 const pct = (n: number) => `${Math.round(Math.max(0, Math.min(1, n)) * 100)}%`;
 
-export function PeriodHero({ totals, nav, ...s }: HeroState & { totals?: { income: number; expenses: number; net: number }; /** The period pager, shown in the hero's top row. */ nav?: React.ReactNode }) {
+export function PeriodHero({ totals, nav, stats, ...s }: HeroState & { totals?: { income: number; expenses: number; net: number }; /** The period pager, shown in the hero's top row. */ nav?: React.ReactNode; stats?: StatStripItem[] }) {
   const t = useTranslations("pageHero");
   const ts = useTranslations("sections");
   const locale = useLocale();
-  return <PageHero title={ts("summary")} icon={<PieChart size={15} aria-hidden="true" />} meta={nav} {...s}
+  return <PageHero title={ts("summary")} icon={<PieChart size={15} aria-hidden="true" />} meta={nav} stats={stats} {...s}
     label={t("periodLabel")} value={totals && shekels(totals.net, locale)}
     sentence={totals && t("txSentence", { income: shekels(totals.income, locale), expense: shekels(totals.expenses, locale) })} />;
 }
@@ -121,8 +120,16 @@ export function RecurringHero({ monthly, count, ...s }: HeroState & { monthly: n
   const t = useTranslations("pageHero");
   const ts = useTranslations("sections");
   const locale = useLocale();
+  // Strip: a year of it, how many, and its share of an average month's income.
+  const health = useQuery({ queryKey: ["cashflow-health"], queryFn: getCashflowHealth });
+  const income = health.data?.avgIncome ?? 0;
+  const stats: StatStripItem[] = count ? [
+    { key: "year", label: t("recurringYear"), value: <bdi>{shekels(monthly * 12, locale)}</bdi> },
+    { key: "count", label: t("recurringActive"), value: count },
+    ...(income > 0 ? [{ key: "share", label: t("recurringShare"), value: pct(monthly / income) }] : []),
+  ] : [];
   return <PageHero title={ts("recurring")} icon={<Repeat size={15} aria-hidden="true" />} {...s}
-    label={t("recurringLabel")} value={shekels(monthly, locale)}
+    label={t("recurringLabel")} value={shekels(monthly, locale)} stats={stats}
     sentence={count ? t("recurringSentence", { count }) : t("recurringEmpty")} />;
 }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { getHome, getInsights, getSettings } from "@/lib/api";
@@ -17,7 +17,7 @@ import { MonthCelebration } from "./month-celebration";
 import { PersonalGrid } from "./personal-grid";
 import { ScenarioCard } from "./scenario-card";
 import { GoalFocus } from "./goal-focus";
-import { HomeTeasers, WelcomePrompt } from "./home-teasers";
+import { WelcomePrompt } from "./home-teasers";
 import { CategoryScroll } from "./category-scroll";
 import { HistoricalTrendCard } from "./historical-trend-card";
 import { RecentTransactionsCard } from "./recent-transactions-card";
@@ -27,13 +27,16 @@ import { BankHealthCard } from "./bank-health-card";
 import { SyncFailureBanner } from "./sync-failure-banner";
 import { SimpleHome } from "./simple-home";
 import { MoneyMap } from "./money-map";
+import { DashboardBoard } from "./dashboard-board";
+import { QuickStartRail } from "./quick-start-rail";
 import { NextStep } from "./today-card";
+import { QuickActions } from "./quick-actions";
 import { PetHeroAside } from "./pet-card";
 import { usePlan } from "@/hooks/use-plan";
 import { CardError, CardSkeleton } from "./card-shell";
 import type { HomePayload, HomeSection } from "@/lib/types";
 
-export function HomePage() {
+export function HomePage({ focus = false }: { focus?: boolean } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [autoStartSync] = useState(() => searchParams.get("sync") === "1");
@@ -59,35 +62,79 @@ export function HomePage() {
     }
   }, [autoStartSync, router]);
 
+  // "view as member" on the dashboard; the unscoped key stays ["home"], shared with the sidebar.
+  const [owner, setOwner] = useState("");
+  // The month the board shows; "" is this month (and keeps the shared ["home"] key).
+  const [boardMonth, setBoardMonth] = useState("");
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["home"],
-    queryFn: getHome,
+    queryKey: owner || boardMonth ? ["home", owner, boardMonth] : ["home"],
+    queryFn: () => getHome(owner || undefined, boardMonth || undefined),
+    placeholderData: keepPreviousData,
   });
 
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: getSettings });
   const { data: insights } = useQuery({ queryKey: ["insights"], queryFn: getInsights });
-  const { plan, loaded, update } = usePlan();
+  const { plan, loaded } = usePlan();
   const detail = searchParams.get("view") === "detail";
-  // ?view=detail shows the advanced home without changing the saved mode (wheel paging lands here from Simple).
-  const simple = plan.simpleMode && !(detail && plan.homeStyle !== "companion");
+  // ?view=detail shows the advanced home without changing the saved mode.
+  // Focus (/focus) is the one-page home; it is reached only from its own menu item.
+  const simple = focus;
   const companion = plan.homeStyle === "companion";
   // Pocket Pal sits in the purple card, at its end side (visual left in Hebrew).
-  const petAside = loaded && plan.pet.enabled ? <PetHeroAside /> : undefined;
+  // The intro invite rides with the pet instead of taking a block of its own.
+  const petAside = loaded && plan.pet.enabled ? <PetHeroAside extra={<WelcomePrompt variant="pip" />} /> : undefined;
   const nextStep = <NextStep home={data} homePending={isLoading} homeFailed={isError} />;
   const linkClass = "mx-auto flex min-h-11 w-fit items-center rounded-full px-4 text-footnote font-medium text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring";
-
+  // Two homes: the raze one-pager, or everything Home knows, expanded. Leaving the detail view first.
   // Until the plan loads, show only what both styles share (greeting and this month's card), so neither style flashes.
-  if (!loaded || (companion && !detail)) {
+  if (!loaded) {
     return (
       <>
-        <PageHeader title={t("pageTitle")} largeTitle={false} />
-        <div className="mx-auto w-full max-w-6xl px-4 pb-8 pt-3 md:px-6 lg:px-8">
+        <PageHeader title={simple ? t("focusTitle") : t("pageTitle")} largeTitle={false} />
+        <div className="mx-auto w-full max-w-[1920px] px-4 pb-8 pt-3 md:px-6 lg:px-8">
           <SyncFailureBanner items={data?.bankHealth ?? null} className="mb-4 md:mb-5 lg:mb-6" />
           <Greeting name={settings?.displayName} />
-          <SimpleHome name={settings?.displayName} cardOnly extra={nextStep} heroAside={petAside} />
-          {loaded && companion && <MoneyMap />}
-          {loaded && <WelcomePrompt />}
-          {loaded && !simple && <Link href="/?view=detail" className={linkClass}>{t("detailLink")}</Link>}
+          <div className="rise-in mb-3"><QuickActions /></div>
+          <CardSkeleton label={t("cashFlowTitle")} height={280} />
+        </div>
+      </>
+    );
+  }
+
+  if (!simple) {
+    return <>
+      <PageHeader title={simple ? t("focusTitle") : t("pageTitle")} largeTitle={false} />
+      <div className="mx-auto w-full max-w-[1920px] space-y-5 px-4 py-6 md:px-8">
+        <SyncFailureBanner items={data?.bankHealth ?? null} />
+        {/* The board, with Quick start beside it on wide screens and above it on narrow ones. */}
+        <div className="flex flex-col gap-4 xl:flex-row-reverse xl:items-start">
+          <QuickStartRail />
+          <div className="min-w-0 flex-1"><DashboardBoard data={data} isLoading={isLoading} isError={isError} owner={owner} onOwnerChange={setOwner} month={boardMonth} onMonthChange={setBoardMonth} /></div>
+        </div>
+      </div>
+    </>;
+  }
+
+  // The companion style: one calm overview, unless simple mode asks for the compact hero.
+  if (companion && !detail) {
+    return (
+      <>
+        <PageHeader title={simple ? t("focusTitle") : t("pageTitle")} largeTitle={false} />
+        <div className="mx-auto w-full max-w-[1920px] px-4 pb-8 pt-3 md:px-6 lg:px-8">
+          <SyncFailureBanner items={data?.bankHealth ?? null} className="mb-4 md:mb-5 lg:mb-6" />
+          {/* Simple mode keeps the page quiet: adding and importing live in the card's own menu row. */}
+          {!simple && <div className="rise-in mb-3"><QuickActions /></div>}
+          {simple ? (
+            <SimpleHome name={settings?.displayName} extra={nextStep} heroAside={petAside} />
+          ) : (
+            <>
+              <Greeting name={settings?.displayName} />
+              <SimpleHome name={settings?.displayName} cardOnly extra={nextStep} heroAside={petAside} />
+              <MoneyMap />
+            </>
+          )}
+          {!petAside && <WelcomePrompt />}
+          {!simple && <Link href="/?view=detail" className={linkClass}>{t("detailLink")}</Link>}
         </div>
       </>
     );
@@ -95,27 +142,16 @@ export function HomePage() {
 
   return (
     <>
-      <PageHeader
-        title={t("pageTitle")}
-        largeTitle={false}
-        actions={
-          <div role="group" aria-label={t("simple.modeLabel")} className="inline-flex rounded-full bg-muted p-0.5 text-sm">
-            {[true, false].map((v) => (
-              <button key={String(v)} type="button" aria-pressed={simple === v} onClick={() => { if (simple !== plan.simpleMode) router.replace("/", { scroll: false }); if (plan.simpleMode !== v) void update({ simpleMode: v }); }}
-                className={`relative rounded-full px-3 py-1 after:absolute after:-inset-y-2 after:inset-x-0 ${simple === v ? "bg-background font-medium shadow-sm" : "text-muted-foreground"}`}>
-                {t(v ? "simple.simple" : "simple.advanced")}
-              </button>
-            ))}
-          </div>
-        }
-      />
+      {/* The view is chosen in the sidebar menu, not by a toggle on the page. */}
+      <PageHeader title={simple ? t("focusTitle") : t("pageTitle")} largeTitle={false} />
       {/* The detail view of the Companion style always offers the way back. */}
-      {companion && <div className="mx-auto w-full max-w-6xl px-4 pt-3 md:px-6 lg:px-8"><Link href="/" className="inline-flex min-h-11 items-center rounded-full px-3 text-footnote font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{t("companionLink")}</Link></div>}
+      {companion && <div className="mx-auto w-full max-w-[1920px] px-4 pt-3 md:px-6 lg:px-8"><Link href="/" className="inline-flex min-h-11 items-center rounded-full px-3 text-footnote font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{t("companionLink")}</Link></div>}
+      {!simple && <div className="rise-in mx-auto w-full max-w-[1920px] px-4 pb-1 md:px-6 lg:px-8"><QuickActions /></div>}
       {simple ? (
         <div className="px-4 pb-8 pt-3"><SimpleHome name={settings?.displayName} extra={nextStep} heroAside={petAside} /></div>
       ) : (
 
-      <div className="mx-auto w-full max-w-6xl px-4 pb-8 pt-3 md:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1920px] px-4 pb-8 pt-3 md:px-6 lg:px-8">
         <SyncFailureBanner
           items={data?.bankHealth ?? null}
           className="mb-4 md:mb-5 lg:mb-6"
@@ -126,7 +162,7 @@ export function HomePage() {
         <SuggestionsTipsCard />
         <HealthCard />
         <MonthCelebration />
-        <WelcomePrompt />
+        {!petAside && <WelcomePrompt />}
         <PersonalGrid render={id => {
           if (id === "goals") return <GoalFocus />;
           if (id === "planner") return <ScenarioCard />;

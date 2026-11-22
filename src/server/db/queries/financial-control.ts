@@ -1,4 +1,6 @@
 import "server-only";
+
+import { ApiError } from "@/server/lib/api-error";
 import { getDb } from "../index";
 import { getWorkspaceSetting } from "./settings";
 import { israelToday } from "@/server/lib/date-utils";
@@ -14,10 +16,10 @@ export function goalLinks(ws:number):GoalLink[] { return getDb().prepare("SELECT
 export function goalRules(ws:number):GoalRule[] { return getDb().prepare("SELECT id,goal_id AS goalId,account,description,direction,from_date AS fromDate,enabled,automatic,transaction_sign AS transactionSign FROM goal_rules WHERE workspace_id=? ORDER BY id DESC").all(ws) as GoalRule[]; }
 export function controlPayload(ws:number, month=israelToday().slice(0,7)):ControlPayload {
  const db=getDb(), today=israelToday();
- if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("Invalid month");
+ if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new ApiError("Invalid month", 400);
  const previousMonth=shiftMonth(month,-1); const day=month===today.slice(0,7)?Number(today.slice(8)):31;
  const end=(m:string)=>monthDay(Number(m.slice(0,4)),Number(m.slice(5))-1,day);
- const aggregate=(m:string)=>db.prepare("SELECT COALESCE(t.category_id,0) AS categoryId,COALESCE(c.name,'Uncategorized') AS name,SUM(-t.charged_amount) AS amount FROM category_transactions t LEFT JOIN categories c ON c.id=t.category_id WHERE t.workspace_id=? AND t.kind='expense' AND t.status='completed' AND t.is_excluded=0 AND substr(t.date,1,10) BETWEEN ? AND ? GROUP BY t.category_id").all(ws,m+"-01",end(m)) as {categoryId:number;name:string;amount:number}[];
+ const aggregate=(m:string)=>db.prepare("SELECT COALESCE(t.category_id,0) AS categoryId,COALESCE(c.name,'Uncategorized') AS name,SUM(-t.personal_amount) AS amount FROM category_transactions t LEFT JOIN categories c ON c.id=t.category_id WHERE t.workspace_id=? AND t.kind='expense' AND t.status='completed' AND t.is_excluded=0 AND substr(t.date,1,10) BETWEEN ? AND ? GROUP BY t.category_id").all(ws,m+"-01",end(m)) as {categoryId:number;name:string;amount:number}[];
  const current=aggregate(month), previous=aggregate(previousMonth), ids=new Set([...current,...previous].map(c=>c.categoryId));
  const drivers=[...ids].map(id=>{const a=current.find(c=>c.categoryId===id),b=previous.find(c=>c.categoryId===id);return {categoryId:id,name:a?.name??b!.name,current:a?.amount??0,previous:b?.amount??0,delta:(a?.amount??0)-(b?.amount??0)};}).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
  const quality:QualityFinding[]=[];
@@ -39,25 +41,25 @@ export function controlPayload(ws:number, month=israelToday().slice(0,7)):Contro
 
 export function previewGoalRule(ws:number, rule:Pick<GoalRule,"account"|"description"|"direction"|"fromDate"|"goalId"|"transactionSign">) {
  const db=getDb();
- if(!db.prepare("SELECT 1 FROM goals WHERE workspace_id=? AND id=?").get(ws,rule.goalId)) throw new Error("Goal not found");
- if(!validDay(rule.fromDate)||!rule.account||!rule.description.trim()||![1,-1].includes(rule.direction)) throw new Error("Invalid rule");
+ if(!db.prepare("SELECT 1 FROM goals WHERE workspace_id=? AND id=?").get(ws,rule.goalId)) throw new ApiError("Goal not found", 404);
+ if(!validDay(rule.fromDate)||!rule.account||!rule.description.trim()||![1,-1].includes(rule.direction)) throw new ApiError("Invalid rule", 400);
  return db.prepare("SELECT t.id AS transactionId,t.description,t.date,ABS(t.charged_amount)*? AS contribution,? AS goalId FROM transactions t WHERE t.workspace_id=? AND t.account_number=? AND instr(lower(t.description),lower(?))>0 AND substr(t.date,1,10)>=? AND t.charged_amount * ? > 0 AND t.kind='transfer' AND t.status='completed' AND t.is_excluded=0 AND NOT EXISTS (SELECT 1 FROM goal_links l WHERE l.transaction_id=t.id) ORDER BY t.date DESC LIMIT 201").all(rule.direction,rule.goalId,ws,rule.account,rule.description,rule.fromDate,rule.transactionSign===1?1:-1) as GoalLink[];
 }
 
 export function controlCommand(ws:number, body:Record<string,unknown>, actorId:number|null=null) {
  const db=getDb(); const action=body.action;
  const audit=(before:unknown,after:unknown)=>Number(db.prepare("INSERT INTO control_audit (workspace_id,action,before_json,after_json,actor_id) VALUES (?,?,?,?,?)").run(ws,String(action),JSON.stringify(before),JSON.stringify(after),actorId).lastInsertRowid);
- const number=(x:unknown)=>{if(typeof x!=="number"||!Number.isFinite(x)||x<0||x>=1e10)throw new Error("Invalid amount");return x;};
+ const number=(x:unknown)=>{if(typeof x!=="number"||!Number.isFinite(x)||x<0||x>=1e10)throw new ApiError("Invalid amount", 400);return x;};
  return db.transaction(()=>{
   if(action==="assign") {
-   if(!Number.isSafeInteger(body.transactionId)||!Number.isSafeInteger(body.userId)||!db.prepare("SELECT 1 FROM transactions WHERE workspace_id=? AND id=?").get(ws,body.transactionId)||!db.prepare("SELECT 1 FROM app_users WHERE id=? AND disabled=0 AND (is_admin=1 OR id IN (SELECT user_id FROM workspace_members WHERE workspace_id=?))").get(body.userId,ws))throw new Error("Invalid assignment");
+   if(!Number.isSafeInteger(body.transactionId)||!Number.isSafeInteger(body.userId)||!db.prepare("SELECT 1 FROM transactions WHERE workspace_id=? AND id=?").get(ws,body.transactionId)||!db.prepare("SELECT 1 FROM app_users WHERE id=? AND disabled=0 AND (is_admin=1 OR id IN (SELECT user_id FROM workspace_members WHERE workspace_id=?))").get(body.userId,ws))throw new ApiError("Invalid assignment", 400);
    const before=db.prepare("SELECT * FROM transaction_tasks WHERE transaction_id=?").get(body.transactionId)??null;
    db.prepare("INSERT INTO transaction_tasks(transaction_id,user_id,done) VALUES (?,?,?) ON CONFLICT(transaction_id) DO UPDATE SET user_id=excluded.user_id,done=excluded.done,updated_at=datetime('now')").run(body.transactionId,body.userId,body.done===true?1:0);audit(before,{transactionId:body.transactionId,userId:body.userId,done:body.done===true});return {success:true};
   }
   if(action==="reserve") {const amount=number(body.amount);const before=cashReserve(ws);db.prepare("INSERT INTO workspace_settings(workspace_id,key,value) VALUES (?,'cash_reserve',?) ON CONFLICT(workspace_id,key) DO UPDATE SET value=excluded.value").run(ws,String(amount));audit(before,amount);return {success:true};}
   if(action==="commitment") {
-   const item=body.item as Commitment; if(!item||typeof item.name!=="string"||!item.name.trim()||item.name.length>80||!validDay(item.nextDate)||!["once","monthly","yearly"].includes(item.cadence)||!["bank","card"].includes(item.source)||!["active","cancelled"].includes(item.status)||item.trialEnd!=null&&!validDay(item.trialEnd))throw new Error("Invalid commitment");
-   number(item.amount);const before=item.id?listCommitments(ws).find(c=>c.id===item.id):null;if(item.id&&!before)throw new Error("Not found");
+   const item=body.item as Commitment; if(!item||typeof item.name!=="string"||!item.name.trim()||item.name.length>80||!validDay(item.nextDate)||!["once","monthly","yearly"].includes(item.cadence)||!["bank","card"].includes(item.source)||!["active","cancelled"].includes(item.status)||item.trialEnd!=null&&!validDay(item.trialEnd))throw new ApiError("Invalid commitment", 400);
+   number(item.amount);const before=item.id?listCommitments(ws).find(c=>c.id===item.id):null;if(item.id&&!before)throw new ApiError("Not found", 404);
    if(before) db.prepare("UPDATE commitments SET name=?,amount=?,next_date=?,cadence=?,source=?,status=?,trial_end=?,previous_amount=?,updated_at=datetime('now') WHERE workspace_id=? AND id=?").run(item.name.trim(),item.amount,item.nextDate,item.cadence,item.source,item.status,item.trialEnd,before.amount!==item.amount?before.amount:before.previousAmount,ws,item.id);
    else db.prepare("INSERT INTO commitments(workspace_id,name,amount,next_date,cadence,source,status,trial_end,series_key) VALUES (?,?,?,?,?,?,?,?,?)").run(ws,item.name.trim(),item.amount,item.nextDate,item.cadence,item.source,item.status,item.trialEnd,typeof item.seriesKey==="string"?item.seriesKey.slice(0,300):null);
    audit(before,item);return {success:true};
@@ -65,29 +67,29 @@ export function controlCommand(ws:number, body:Record<string,unknown>, actorId:n
   if(action==="link") {
    const id=Number(body.transactionId), goal=Number(body.goalId), contribution=Number(body.contribution);
    const txn=db.prepare("SELECT charged_amount,kind,status FROM transactions WHERE workspace_id=? AND id=?").get(ws,id) as {charged_amount:number;kind:string;status:string}|undefined;
-   if(!txn||txn.kind!=="transfer"||txn.status!=="completed"||!Number.isFinite(contribution)||Math.abs(contribution)>Math.abs(txn.charged_amount)||contribution===0||!db.prepare("SELECT 1 FROM goals WHERE workspace_id=? AND id=?").get(ws,goal))throw new Error("Link a completed transfer and an amount no larger than the transfer");
+   if(!txn||txn.kind!=="transfer"||txn.status!=="completed"||!Number.isFinite(contribution)||Math.abs(contribution)>Math.abs(txn.charged_amount)||contribution===0||!db.prepare("SELECT 1 FROM goals WHERE workspace_id=? AND id=?").get(ws,goal))throw new ApiError("Link a completed transfer and an amount no larger than the transfer", 400);
    const before=goalLinks(ws).find(l=>l.transactionId===id)??null;
    db.prepare("INSERT INTO goal_links(transaction_id,goal_id,contribution) VALUES (?,?,?) ON CONFLICT(transaction_id) DO UPDATE SET goal_id=excluded.goal_id,contribution=excluded.contribution").run(id,goal,contribution);audit(before,{transactionId:id,goalId:goal,contribution});return {success:true};
   }
-  if(action==="unlink") {const before=goalLinks(ws).find(l=>l.transactionId===body.transactionId);if(!before)throw new Error("Not found");db.prepare("DELETE FROM goal_links WHERE transaction_id=?").run(before.transactionId);audit(before,null);return {success:true};}
+  if(action==="unlink") {const before=goalLinks(ws).find(l=>l.transactionId===body.transactionId);if(!before)throw new ApiError("Not found", 404);db.prepare("DELETE FROM goal_links WHERE transaction_id=?").run(before.transactionId);audit(before,null);return {success:true};}
   if(action==="rule-preview"||action==="rule-save"||action==="rule-apply") {
    const rule=body.rule as GoalRule;const matches=previewGoalRule(ws,rule);
    if(action==="rule-preview")return {matches};
-   if(matches.length>200)throw new Error("Narrow the date range to 200 transfers or fewer");
+   if(matches.length>200)throw new ApiError("Narrow the date range to 200 transfers or fewer", 400);
    if(action==="rule-save") {db.prepare("INSERT INTO goal_rules(workspace_id,goal_id,account,description,direction,from_date,automatic,transaction_sign) VALUES (?,?,?,?,?,?,?,?)").run(ws,rule.goalId,rule.account,rule.description,rule.direction,body.automatic===true&&rule.fromDate<israelToday()?israelToday():rule.fromDate,body.automatic===true?1:0,rule.transactionSign===1?1:-1);audit(null,rule);return {success:true};}
-   if(!Array.isArray(body.expectedIds)||JSON.stringify(matches.map(m=>m.transactionId))!==JSON.stringify(body.expectedIds))throw new Error("Preview changed. Preview again before applying.");
+   if(!Array.isArray(body.expectedIds)||JSON.stringify(matches.map(m=>m.transactionId))!==JSON.stringify(body.expectedIds))throw new ApiError("Preview changed. Preview again before applying.", 409);
    for(const m of matches)db.prepare("INSERT INTO goal_links(transaction_id,goal_id,contribution) VALUES (?,?,?)").run(m.transactionId,m.goalId,m.contribution);
    const undoId=audit([],matches);return {success:true,undoId};
   }
-  if(action==="rule-toggle") {const before=goalRules(ws).find(r=>r.id===body.id);if(!before)throw new Error("Not found");db.prepare("UPDATE goal_rules SET enabled=? WHERE workspace_id=? AND id=?").run(body.enabled===true?1:0,ws,before.id);audit(before,{...before,enabled:body.enabled===true?1:0});return {success:true};}
+  if(action==="rule-toggle") {const before=goalRules(ws).find(r=>r.id===body.id);if(!before)throw new ApiError("Not found", 404);db.prepare("UPDATE goal_rules SET enabled=? WHERE workspace_id=? AND id=?").run(body.enabled===true?1:0,ws,before.id);audit(before,{...before,enabled:body.enabled===true?1:0});return {success:true};}
   if(action==="undo-rule") {
-   const entry=db.prepare("SELECT after_json FROM control_audit WHERE workspace_id=? AND id=? AND action='rule-apply'").get(ws,Number(body.id)) as {after_json:string}|undefined;if(!entry)throw new Error("Undo unavailable");
+   const entry=db.prepare("SELECT after_json FROM control_audit WHERE workspace_id=? AND id=? AND action='rule-apply'").get(ws,Number(body.id)) as {after_json:string}|undefined;if(!entry)throw new ApiError("Undo unavailable", 400);
    const after=JSON.parse(entry.after_json) as GoalLink[];const current=goalLinks(ws);
-   if(after.some(a=>!current.some(c=>c.transactionId===a.transactionId&&c.goalId===a.goalId&&c.contribution===a.contribution)))throw new Error("Links changed since this action");
+   if(after.some(a=>!current.some(c=>c.transactionId===a.transactionId&&c.goalId===a.goalId&&c.contribution===a.contribution)))throw new ApiError("Links changed since this action", 409);
    for(const a of after)db.prepare("DELETE FROM goal_links WHERE transaction_id=?").run(a.transactionId);
    db.prepare("UPDATE control_audit SET action='rule-undone' WHERE id=? AND workspace_id=?").run(body.id,ws);audit(after,[]);return {success:true};
   }
-  throw new Error("Unknown action");
+  throw new ApiError("Unknown action", 400);
  })();
 }
 

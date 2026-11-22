@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Download, FileJson, FolderOpen, Lock, Printer } from "lucide-react";
+import { Download, FileJson, FolderOpen, Lock, Printer, HeartHandshake } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -113,7 +113,7 @@ export function LegacyDocument() {
   });
 
   return (
-    <SectionShell title={t("title")} description={t("description")}>
+    <SectionShell title={t("title")} description={t("description")} icon={<HeartHandshake aria-hidden />}>
       <style>{LEGACY_CSS}</style>
       <div className="legacy-print-hidden print-hidden space-y-4">
         <section aria-labelledby="legacy-export-title">

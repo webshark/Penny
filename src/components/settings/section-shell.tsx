@@ -1,24 +1,39 @@
-import { InfoTip } from "@/components/ui/info-tip";
 import type { ReactNode } from "react";
 
 interface SectionShellProps {
   title: string;
   description?: string;
+  /** Marks the section at a glance, the way a bank app tags each account screen. */
+  icon?: ReactNode;
   children: ReactNode;
 }
 
 export function SectionShell({
   title,
   description,
+  icon,
   children,
 }: SectionShellProps) {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-1">
-        <h2 className="text-[1.75rem] leading-9 font-bold tracking-tight">{title}</h2>
-        {description && <InfoTip text={description} />}
-      </div>
-      <div className="space-y-7">{children}</div>
+    // One surface per screen: the title, then each group of settings as a section divided by a hairline.
+    <div className="rounded-[20px] border border-border/60 bg-card shadow-[0_1px_2px_rgb(20_18_43/0.04),0_12px_28px_-24px_rgb(20_18_43/0.45)]">
+      <header className="flex items-start gap-3 px-5 pb-5 pt-5 sm:px-6">
+        {icon && (
+          <span
+            aria-hidden
+            className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-primary/12 text-primary ring-1 ring-primary/15 ring-inset [&_svg]:size-5"
+          >
+            {icon}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[1.75rem] leading-9 font-bold tracking-tight">{title}</h2>
+          {description && (
+            <p className="mt-0.5 text-footnote leading-5 text-pretty text-muted-foreground">{description}</p>
+          )}
+        </div>
+      </header>
+      <div className="space-y-6 border-t border-border px-5 py-5 sm:px-6 [&>section+section]:border-t [&>section+section]:border-border [&>section+section]:pt-6">{children}</div>
     </div>
   );
 }
@@ -40,29 +55,56 @@ export function SettingCard({
   children,
 }: SettingCardProps) {
   return (
-    // iOS grouped section: the title sits above the card, the card holds only the controls.
+    // A section of the screen's card: its title and a one-line explanation in plain view, then the controls.
     <section id={id} className="scroll-mt-20">
-      {(title || description) && (
-        <div className="mb-2 flex items-center gap-1 px-4">
-          {title && <h3 className="text-sm font-semibold text-muted-foreground">{title}</h3>}
-          {/* With a title, the explanation goes behind the "i" so the header stays one line. */}
-          {description && (title ? <InfoTip text={description} /> : <p className="text-sm text-muted-foreground">{description}</p>)}
-          {aside && <span className="ms-auto">{aside}</span>}
+      {(title || description || aside) && (
+        <div className="mb-3 flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            {title && <h3 className="text-base font-semibold">{title}</h3>}
+            {description && <p className="mt-0.5 text-footnote leading-5 text-pretty text-muted-foreground">{description}</p>}
+          </div>
+          {aside && <span className="shrink-0">{aside}</span>}
         </div>
       )}
-      <div className="rounded-2xl bg-card px-4 py-3">{children}</div>
+      {children}
     </section>
   );
 }
 
 /** iOS row: label + short hint at the start, the control at the end. Rows in one card get hairlines from <SettingList>. */
-export function SettingRow({ label, hint, htmlFor, labelId, children }: { label: ReactNode; hint?: ReactNode; htmlFor?: string; labelId?: string; children?: ReactNode }) {
+export function SettingRow({
+  label,
+  hint,
+  icon,
+  htmlFor,
+  labelId,
+  children,
+}: {
+  label: ReactNode;
+  hint?: ReactNode;
+  icon?: ReactNode;
+  htmlFor?: string;
+  labelId?: string;
+  children?: ReactNode;
+}) {
   const Label = htmlFor ? "label" : "span";
   return (
-    <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5 first:pt-0 last:pb-0">
-      <div className="min-w-0 flex-1 basis-44">
-        <Label htmlFor={htmlFor} id={labelId} className="block font-medium">{label}</Label>
-        {hint && <span className="block text-footnote text-muted-foreground">{hint}</span>}
+    <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {icon && (
+          <span
+            aria-hidden
+            className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-muted text-foreground/70 [&_svg]:size-4"
+          >
+            {icon}
+          </span>
+        )}
+        <div className="min-w-0">
+          <Label htmlFor={htmlFor} id={labelId} className="block text-[0.9375rem] font-medium">
+            {label}
+          </Label>
+          {hint && <span className="mt-0.5 block text-footnote leading-5 text-muted-foreground">{hint}</span>}
+        </div>
       </div>
       {children}
     </div>
@@ -70,7 +112,7 @@ export function SettingRow({ label, hint, htmlFor, labelId, children }: { label:
 }
 
 export function SettingList({ children }: { children: ReactNode }) {
-  return <div className="divide-y divide-border">{children}</div>;
+  return <div className="divide-y divide-border/70">{children}</div>;
 }
 
 /** On/off status next to a section title: green dot when on, muted when off. */

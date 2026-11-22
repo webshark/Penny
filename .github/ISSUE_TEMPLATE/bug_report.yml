@@ -32,7 +32,7 @@ body:
     attributes:
       label: Penny version
       description: Settings shows it, or the release you downloaded.
-      placeholder: "0.1.0"
+      placeholder: "0.2.0"
   - type: input
     id: bank
     attributes:

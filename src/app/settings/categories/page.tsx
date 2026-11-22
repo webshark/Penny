@@ -1,13 +1,14 @@
 "use client";
 
-import { Forward } from "@/components/ui/dir-chevron";
 import { Children, useId, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocale, useTranslations, useMessages } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { shekels } from "@/lib/money";
 import { Segmented } from "@/components/ui/segmented";
 import { translateCategoryName } from "@/lib/i18n-data";
-import { ChevronDown, Plus, Search } from "lucide-react";
+import { ChevronDown, Layers, ListChecks, MoreVertical, Pencil, Plus, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { IconButton } from "@/components/ui/icon-button";
 import { SectionShell } from "@/components/settings/section-shell";
@@ -37,7 +38,8 @@ export default function CategoriesSettingsPage() {
   const [search, setSearch] = useState("");
   const [activeKind, setActiveKind] = useState<CategoryKind>("expense");
   const [openId, setOpenId] = useState<number | null>(null);
-  const [creating, setCreating] = useState(false);
+  // Closed, or open (optionally inside a group, from that group's menu).
+  const [creating, setCreating] = useState<false | { group?: number }>(false);
 
   const dataByCategoryId = useMemo(() => {
     const m = new Map<number, CategoryWithData>();
@@ -86,6 +88,7 @@ export default function CategoriesSettingsPage() {
       <SectionShell
         title={t("title")}
         description={t("description")}
+        icon={<Layers aria-hidden />}
       >
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
@@ -105,10 +108,10 @@ export default function CategoriesSettingsPage() {
               className="ps-8"
             />
           </div>
-          <IconButton label={t("newCategoryButton")} variant="outline" onClick={() => setCreating(true)}>
+          <IconButton label={t("newCategoryButton")} variant="outline" onClick={() => setCreating({})}>
             <Plus aria-hidden className="size-4" />
           </IconButton>
-          <NewCategoryDialog open={creating} onOpenChange={setCreating} kind={activeKind} />
+          <NewCategoryDialog key={creating ? (creating.group ?? "new") : "closed"} open={!!creating} onOpenChange={(o) => { if (!o) setCreating(false); }} kind={activeKind} defaultGroup={creating ? creating.group : undefined} />
         </div>
 
         {!categories ? (
@@ -120,7 +123,8 @@ export default function CategoriesSettingsPage() {
             {t("noMatching")}
           </div>
         ) : (
-          <div className="space-y-6">
+          <section aria-label={t("title")} className="overflow-hidden rounded-2xl border border-border bg-card">
+            <p className="border-b border-border px-4 py-2.5 text-xs text-muted-foreground">{t("treeCount", { count: filtered.length })}</p>
             {parents.map((parent) => (
               <GroupBlock
                 key={parent.id}
@@ -128,7 +132,9 @@ export default function CategoriesSettingsPage() {
                 color={parent.color}
                 parent={parent}
                 onSelect={setOpenId}
+                onAddSub={() => setCreating({ group: parent.id })}
                 dataById={dataByCategoryId}
+                startOpen={search.trim() !== ""}
               >
                 {childrenByParent.get(parent.id)?.map((child) => (
                   <CategoryRow
@@ -146,6 +152,7 @@ export default function CategoriesSettingsPage() {
                 color="#9ca3af"
                 onSelect={setOpenId}
                 dataById={dataByCategoryId}
+                startOpen
               >
                 {orphans.map((cat) => (
                   <CategoryRow
@@ -157,7 +164,7 @@ export default function CategoriesSettingsPage() {
                 ))}
               </GroupBlock>
             ) : null}
-          </div>
+          </section>
         )}
       </SectionShell>
 
@@ -170,12 +177,34 @@ export default function CategoriesSettingsPage() {
   );
 }
 
+/** Edit, and see the transactions: the same two things a row click and a link would do, in one place. */
+function RowMenu({ id, name, onEdit, onAddSub }: { id: number; name: string; onEdit: () => void; onAddSub?: () => void }) {
+  const t = useTranslations("settings.categories");
+  const router = useRouter();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger aria-label={t("rowMenu", { name })} className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+        <MoreVertical className="size-4" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onEdit}><Pencil className="size-4" aria-hidden />{t("menuEdit")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push(`/transactions?category=${id}`)}><ListChecks className="size-4" aria-hidden />{t("menuTransactions")}</DropdownMenuItem>
+        {onAddSub && <DropdownMenuItem onClick={onAddSub}><Plus className="size-4" aria-hidden />{t("menuAddSub")}</DropdownMenuItem>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** One group in the tree: a row that opens and closes its subcategories, with the group's spending this month. */
 function GroupBlock({
   title,
   color,
   parent,
   children,
   onSelect,
+  onAddSub,
+  dataById,
+  startOpen = false,
 }: {
   title: string;
   color: string;
@@ -183,43 +212,53 @@ function GroupBlock({
   dataById: Map<number, CategoryWithData>;
   children: React.ReactNode;
   onSelect: (id: number) => void;
+  onAddSub?: () => void;
+  startOpen?: boolean;
 }) {
-  const t = useTranslations("settings.categories");
   const tp = useTranslations("categoryPicker");
-  const [open, setOpen] = useState(true);
+  const t = useTranslations("settings.categories");
+  const locale = useLocale();
+  const [open, setOpen] = useState(startOpen);
+  // Searching opens every group with a match; clearing the search keeps whatever the person opened.
+  const [lastStart, setLastStart] = useState(startOpen);
+  if (startOpen !== lastStart) {
+    setLastStart(startOpen);
+    if (startOpen) setOpen(true);
+  }
   const listId = useId();
+  const kids = Children.toArray(children) as React.ReactElement<{ category: Category }>[];
+  const spent = kids.reduce((sum, k) => sum + (dataById.get(k.props.category.id)?.spent ?? 0), 0);
   return (
-    <section>
-      <div className="mb-1 flex items-center gap-2 px-4">
+    <div className="border-b border-border last:border-b-0">
+      <div className="flex min-h-12 items-center gap-1 pe-2 ps-1 hover:bg-muted/40">
         <button
           type="button"
           aria-expanded={open}
           aria-controls={listId}
+          aria-label={t(open ? "collapseGroup" : "expandGroup", { name: title })}
           onClick={() => setOpen((o) => !o)}
-          className="flex min-h-11 min-w-0 items-center gap-2 rounded-md text-start focus-visible:outline-2 focus-visible:outline-ring"
+          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
         >
-          <ChevronDown aria-hidden className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90 rtl:rotate-90"}`} />
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
-          <span title={title} className="truncate text-sm font-semibold text-muted-foreground">{title}</span>
-          <span className="shrink-0 text-xs tabular-nums text-muted-foreground/80">{tp("subcount", { count: Children.count(children) })}</span>
+          <ChevronDown aria-hidden className={`size-4 transition-transform motion-reduce:transition-none ${open ? "" : "-rotate-90 rtl:rotate-90"}`} />
         </button>
-        {parent ? (
-          <button
-            type="button"
-            onClick={() => onSelect(parent.id)}
-            className="ms-auto inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            {t("editGroup")}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => (parent ? onSelect(parent.id) : setOpen((o) => !o))}
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1 text-start focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <span className="size-3 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
+          <span title={title} className="truncate text-sm font-semibold">{title}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{tp("subcount", { count: kids.length })}</span>
+        </button>
+        {spent > 0 && <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline" data-money>{t("spentLabel", { amount: shekels(Math.round(spent), locale) })}</span>}
+        {parent && <RowMenu id={parent.id} name={title} onEdit={() => onSelect(parent.id)} onAddSub={onAddSub} />}
       </div>
-      <div id={listId} hidden={!open} className="overflow-hidden rounded-2xl bg-card">
-        <ul className="divide-y divide-border/60">{children}</ul>
-      </div>
-    </section>
+      <div className="reveal" data-open={open} inert={!open}><div><ul id={listId} className="pb-1">{children}</ul></div></div>
+    </div>
   );
 }
 
+/** A subcategory: indented under its group, its colour dot, this month's spending and its budget. */
 function CategoryRow({
   category,
   data,
@@ -231,47 +270,17 @@ function CategoryRow({
 }) {
   const t = useTranslations("settings.categories");
   const tCat = useTranslations("categoriesSeeded");
-  // Read the raw messages: names like "Sports & Hobbies" trip next-intl's key lookup.
-  const descriptions = (useMessages() as { categoryDescriptions?: Record<string, string> }).categoryDescriptions ?? {};
   const locale = useLocale();
-  const stored = category.description?.trim();
-  // Seeded descriptions are English (the categorizer reads them); show the translation unless the user wrote their own.
-  const translated = descriptions[category.name] ?? "";
-  // Seeded descriptions start in English (some mention Hebrew brand names); a user's own Hebrew text stays.
-  const latin = (stored?.match(/[A-Za-z]/g) ?? []).length;
-  const hebrew = (stored?.match(/[֐-׿]/g) ?? []).length;
-  const description = stored && (latin > hebrew || /^[A-Za-z]/.test(stored)) && translated ? translated : stored;
+  const name = translateCategoryName(category.name, tCat);
   return (
-    <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        className="flex w-full items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-muted/50"
-      >
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ background: category.color }}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <span className="truncate" title={translateCategoryName(category.name, tCat)}>{translateCategoryName(category.name, tCat)}</span>
-          </div>
-          {description ? (
-            <div dir="auto" title={description} className="mt-0.5 truncate text-start text-xs text-muted-foreground">
-              {description}
-            </div>
-          ) : null}
-        </div>
-        <div className="hidden shrink-0 text-end sm:block">
-          {data ? (
-            <div className="text-xs tabular-nums text-muted-foreground">
-              {t("spentLabel", { amount: shekels(Math.round(data.spent), locale) })}
-            </div>
-          ) : null}
-        </div>
-        <BudgetChip category={category} data={data} />
-        <Forward className="text-muted-foreground/60" />
+    <li className="flex min-h-11 items-center gap-1 pe-2 ps-11 hover:bg-muted/40">
+      <button type="button" onClick={onSelect} className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1 text-start focus-visible:outline-2 focus-visible:outline-ring">
+        <span className="size-2.5 shrink-0 rounded-full" style={{ background: category.color }} aria-hidden />
+        <span className="truncate text-sm" title={name}>{name}</span>
       </button>
+      {data && data.spent > 0 && <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline" data-money>{t("spentLabel", { amount: shekels(Math.round(data.spent), locale) })}</span>}
+      <BudgetChip category={category} data={data} />
+      <RowMenu id={category.id} name={name} onEdit={onSelect} />
     </li>
   );
 }
@@ -286,21 +295,11 @@ function BudgetChip({
   const locale = useLocale();
   const t = useTranslations("settings.categories");
   if (category.budgetMode === "tracking") {
-    return (
-      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-        {t("tracking")}
-      </span>
-    );
+    return <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{t("tracking")}</span>;
   }
-  if (!data || data.budget <= 0) {
-    return (
-      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-        {t("noBudget")}
-      </span>
-    );
-  }
+  if (!data || data.budget <= 0) return null;
   return (
-    <span className="shrink-0 rounded-full bg-foreground/8 px-2 py-0.5 text-xs font-medium tabular-nums">
+    <span className="shrink-0 rounded-full bg-foreground/8 px-2 py-0.5 text-xs font-medium tabular-nums" title={t("budgetChip")}>
       {shekels(Math.round(data.budget), locale)}
     </span>
   );

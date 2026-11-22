@@ -55,7 +55,7 @@ function CategoryBlock({ item }: { item: HomeCategoryBlock }) {
       className="snap-start scroll-mt-16 rounded-2xl bg-card md:scroll-mt-20"
     >
       <Link
-        href="/budget"
+        href={`/transactions?category=${item.categoryId}`}
         className="glass sticky top-14 z-10 flex items-center gap-3 rounded-t-2xl border-b border-border px-4 py-3 md:top-16 md:px-5"
       >
         <span

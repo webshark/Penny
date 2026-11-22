@@ -42,7 +42,7 @@ export function FinancialControl(){
  if(q.isPending)return <p role="status">{tr("loadingYourFinancialPicture")}</p>;
  if(q.isError)return <div><p>{tr("couldNotLoadYour")}</p><Button onClick={()=>void q.refetch()}>{tr("retry")}</Button></div>;
  const data=q.data,goals=plan.data?.goals??[],txns=transfers.data?.transactions.filter(t=>t.kind==="transfer"&&t.status==="completed"&&!t.isExcluded)??[];
- const names=he?["אמינות וכסף פנוי","התחייבויות","יעדים מחוברים","אוטומציות","מה השתנה?","תכנון חובות","מתחילים כאן"]:["Data & available cash","Commitments","Linked goals","Automations","What changed?","Debt planning","Get started"];
+ const names=tabs.map((id)=>tr(`tab_${id}`));
  const label=(text:string,child:React.ReactNode)=><label key={text} className="grid gap-2 text-sm">{text}{child}</label>;
  const newCommitment=():Commitment=>({id:0,name:"",amount:0,nextDate:today(),cadence:"monthly",source:"bank",status:"active",trialEnd:null,seriesKey:null,previousAmount:null});
  const schedule=amortizationSchedule(debt.balance,debt.rate,debt.payment+debt.extra),base=debtPayoff(debt.balance,debt.rate,debt.payment),improved=debtPayoff(debt.balance,debt.rate,debt.payment+debt.extra);

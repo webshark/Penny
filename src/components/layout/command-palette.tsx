@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { NAVIGATION_GROUPS } from "./navigation-groups";
 import { useStudio } from "@/components/studio-provider";
 import { EyeOff, HandHeart, HeartHandshake, LifeBuoy, Milestone, MessageCircleQuestion, Moon, RefreshCw, Search, Settings2, Sparkles, Sun, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -10,7 +11,6 @@ import { usePlan } from "@/hooks/use-plan";
 import { usePrivacyMode } from "@/hooks/use-privacy-mode";
 import { PRIVACY_SHORTCUT } from "@/components/settings/privacy-mode-switch";
 import { cn } from "@/lib/utils";
-import { FOOTER_NAV, NAV, SEARCH_PAGES } from "./app-sidebar";
 import { askQuestion } from "@/lib/api";
 import { looksLikeQuestion, type AskAnswer } from "@/lib/ask";
 import { AskAnswerView } from "@/components/ask/ask-answer";
@@ -24,13 +24,15 @@ interface Command {
 }
 
 export const OPEN_COMMAND_PALETTE = "penny:open-command-palette";
+/** Desktop: the search grows in place in the top bar instead of floating at the bottom. */
+export const OPEN_INLINE_SEARCH = "penny:open-inline-search";
 
 const SETTINGS = ["general", "appearance", "bank", "ai", "categories", "rules"] as const;
 
 /** The search field: type to jump to a page, setting or action, or ask a question. Results open right above it. */
-export function CommandPalette({ placeholder, onClose }: { placeholder: string; onClose: () => void }) {
+export function CommandPalette({ placeholder, onClose, dropDown = false }: { placeholder: string; onClose: () => void; dropDown?: boolean }) {
   const t = useTranslations("palette");
-  const tNav = useTranslations("nav");
+  const tNavGroups = useTranslations("navGroups");
   const tSettings = useTranslations("settings.sidebar");
   const tRecap = useTranslations("recap");
   const tAsk = useTranslations("ask");
@@ -70,7 +72,7 @@ export function CommandPalette({ placeholder, onClose }: { placeholder: string; 
   const commands = useMemo<Command[]>(() => {
     const go = (href: string) => () => router.push(href);
     return [
-      ...[...NAV.filter((p) => p.href !== "/investments"), ...SEARCH_PAGES, { ...NAV[3], labelKey: "investments" }, ...FOOTER_NAV].map((p) => ({ id: p.href, label: tNav(p.labelKey), hint: t("page"), Icon: p.Icon, run: go(p.href) })),
+      ...NAVIGATION_GROUPS.flatMap(group => group.items.map(p => ({ id: p.href, label: tNavGroups(`pages.${p.key}`), hint: tNavGroups(`groups.${group.key}`), Icon: p.Icon, run: go(p.href) }))),
       { id: "recap", label: tRecap("palette"), hint: t("page"), Icon: Sparkles, run: go("/recap") },
       { id: "ask-page", label: tAsk("title"), hint: t("page"), Icon: MessageCircleQuestion, run: go("/ask") },
       { id: "life", label: tLife("title"), hint: t("page"), Icon: Milestone, run: go("/life") },
@@ -89,7 +91,7 @@ export function CommandPalette({ placeholder, onClose }: { placeholder: string; 
       { id: "simple", label: plan.simpleMode ? t("simpleOff") : t("simpleOn"), hint: t("action"), Icon: Zap, run: () => { void update({ simpleMode: !plan.simpleMode }).catch(() => toast.error(t("saveFailed"))); } },
       { id: "privacy", label: privacyOn ? tPrivacy("modeOffAction") : tPrivacy("modeOnAction"), hint: PRIVACY_SHORTCUT, Icon: EyeOff, run: () => { togglePrivacy(); toast(privacyOn ? tPrivacy("modeOffToast") : tPrivacy("modeOnToast"), { id: "privacy-mode" }); } },
     ];
-  }, [router, t, tNav, tSettings, tRecap, tAsk, tLife, tWell, resolvedTheme, preferences, save, plan.simpleMode, update, tPrivacy, privacyOn, togglePrivacy]);
+  }, [router, t, tNavGroups, tSettings, tRecap, tAsk, tLife, tWell, resolvedTheme, preferences, save, plan.simpleMode, update, tPrivacy, privacyOn, togglePrivacy]);
 
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const askCommand: Command[] = looksLikeQuestion(q)
@@ -157,7 +159,7 @@ export function CommandPalette({ placeholder, onClose }: { placeholder: string; 
       <kbd dir="ltr" className="hidden rounded border border-border px-1.5 text-[0.6875rem] text-muted-foreground md:inline">/</kbd>
       {open && (
         // Opens upward from the bar and spans its full width (the bar is the positioned parent).
-        <div className="absolute inset-x-0 bottom-full z-50 mb-2 flex max-h-[60dvh] flex-col overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl">
+        <div className={`absolute z-50 flex ${dropDown ? "top-full mt-2 inset-x-0 min-w-[26rem]" : "inset-x-0 bottom-full mb-2"} max-h-[60dvh] flex-col overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl`}>
         {asked ? (
           <div className="min-h-0 max-h-[min(28rem,60dvh)] overflow-y-auto overscroll-contain p-5">
             {asked.answer ? <AskAnswerView answer={asked.answer} onExample={(e) => { setQ(e); ask(e); }} onNavigate={close} />

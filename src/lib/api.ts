@@ -8,7 +8,7 @@ import type {
   TransactionWithCategory,
   DashboardSummary,
   Category,
-  SyncRun,
+
   Budget,
   BudgetMode,
   Integration,
@@ -24,6 +24,7 @@ import type {
   MarketsPayload,
   FiPayload,
   PlanPayload,
+  InsurancePayload,
 } from "./types";
 import { getActiveProfileIdSync, getActiveWorkspaceIdSync } from "./workspace-store";
 
@@ -49,6 +50,23 @@ const ERRORS = {
     403: "אין הרשאה לפעולה הזאת.",
     404: "לא מצאנו את מה שחיפשתם. ייתכן שזה נמחק.",
     409: "הנתונים השתנו בינתיים. רעננו את הדף ונסו שוב.",
+    syncBusy: "סנכרון כבר רץ עכשיו. נסו שוב בעוד רגע.",
+    locked: "האפליקציה נעולה. הזינו את הקוד כדי להמשיך.",
+    signInRequired: "צריך לבחור משתמש מחדש. רעננו את הדף.",
+    streamLost: "החיבור נקטע לפני שהפעולה הסתיימה. בדקו ש־Penny פועלת ונסו שוב.",
+
+    ownerRequired: "רק הבעלים של Penny יכול לבצע את הפעולה הזאת.",
+    workspaceDenied: "אין הרשאה לסביבה הזאת.",
+    duplicateName: "כבר קיים פריט בשם הזה. בחרו שם אחר.",
+    lastProfile: "אי אפשר למחוק את הפרופיל האחרון. הוסיפו פרופיל חדש קודם.",
+    lastWorkspace: "אי אפשר למחוק את הסביבה האחרונה.",
+    hasChildren: "לקטגוריה הזאת יש תתי־קטגוריות. מחקו אותן קודם.",
+    targetMissing: "הקטגוריה שאליה משייכים כבר לא קיימת.",
+    notLeafTarget: "אפשר לבחור רק קטגוריה ראשית בתור הורה.",
+    kindMismatch: "אי אפשר לשים קטגוריית הוצאה תחת קטגוריית הכנסה, או להיפך.",
+    selfParent: "קטגוריה לא יכולה להיות ההורה של עצמה.",
+    childHasChildren: "לקטגוריה הזאת כבר יש תתי־קטגוריות, ולכן אי אפשר להעביר אותה.",
+
     429: "יותר מדי ניסיונות. חכו רגע ונסו שוב.",
     server: "משהו השתבש אצלנו. נסו שוב בעוד רגע.",
   },
@@ -59,44 +77,106 @@ const ERRORS = {
     403: "You don't have permission for this.",
     404: "We couldn't find that. It may have been deleted.",
     409: "The data changed meanwhile. Refresh the page and try again.",
+    syncBusy: "A sync is already running. Try again in a moment.",
+    locked: "The app is locked. Enter your code to continue.",
+    signInRequired: "Please choose a user again. Refresh the page.",
+    streamLost: "The connection dropped before it finished. Check that Penny is running and try again.",
+
+    ownerRequired: "Only the owner of Penny can do this.",
+    workspaceDenied: "You don't have access to this workspace.",
+    duplicateName: "Something with that name already exists. Pick another name.",
+    lastProfile: "The last profile can't be deleted. Add another profile first.",
+    lastWorkspace: "The last workspace can't be deleted.",
+    hasChildren: "This category has subcategories. Delete them first.",
+    targetMissing: "The category you're moving it under no longer exists.",
+    notLeafTarget: "Only a top-level category can be the parent.",
+    kindMismatch: "An expense category can't sit under an income category, or the other way round.",
+    selfParent: "A category can't be its own parent.",
+    childHasChildren: "This category already has subcategories, so it can't be moved.",
+
     429: "Too many attempts. Wait a moment and try again.",
     server: "Something went wrong on our side. Try again in a moment.",
   },
 } as const;
+
+/** Machine codes the API and the proxy send; they are never shown as they are. */
+/** A failed request: `status` lets callers tell a user error from a broken server. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number | "network") {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+/** A server `code` the app words itself; anything else falls back to the status text. */
+const CODE_MESSAGES: Record<string, keyof typeof ERRORS.he> = {
+  locked: "locked",
+  "sign-in-required": "signInRequired",
+  "sync-running": "syncBusy",
+  "owner-required": "ownerRequired",
+  "workspace-access-denied": "workspaceDenied",
+  "duplicate-name": "duplicateName",
+  "last-profile": "lastProfile",
+  "last-workspace": "lastWorkspace",
+  "has-children": "hasChildren",
+  "not-found": 404,
+  "target-not-found": "targetMissing",
+  "not-leaf-target": "notLeafTarget",
+  "kind-mismatch": "kindMismatch",
+  "self-parent": "selfParent",
+  "child-has-children": "childHasChildren",
+};
 
 const uiLang = (): "he" | "en" => (typeof document !== "undefined" && document.documentElement.lang === "en" ? "en" : "he");
 
 /** Picks a message the user can read: the server's own text when it is in the UI language, else one by status. */
 export function friendlyError(status: number | "network", body = "", lang = uiLang()): string {
   let detail = body.trim();
+  let serverCode = "";
   try {
-    const j = JSON.parse(detail) as { error?: unknown; message?: unknown };
+    const j = JSON.parse(detail) as { error?: unknown; message?: unknown; code?: unknown };
     detail = String(j.error ?? j.message ?? "");
+    serverCode = typeof j.code === "string" ? j.code : "";
   } catch {}
-  const hebrew = /[֐-׿]/.test(detail);
-  const fits = detail && detail.length < 200 && !/^\s*</.test(detail) && (lang === "he" ? hebrew : !hebrew);
-  if (fits) return detail;
   const m = ERRORS[lang];
+  // A machine code is an id, not copy: never show it as it is.
+  const key = CODE_MESSAGES[(serverCode || detail).toLowerCase()];
+  if (key) return m[key];
+  const hebrew = /[֐-׿]/.test(detail);
+  // A bare identifier ("bad_request", "not_restartable") is a code, not copy: it falls through
+  // to the status text, so every such code gets a readable message without an entry here.
+  const isCode = /^[a-z0-9_-]+$/.test(detail);
+  const fits = detail && detail.length < 200 && !isCode && !/^\s*</.test(detail) && (lang === "he" ? hebrew : !hebrew);
+  if (fits) return detail;
   if (status === "network") return m.network;
+  // 409 covers duplicates, in-use records and the sync lock; only the lock has its own wording.
+  if (status === 409) return /sync/i.test(detail) && /running/i.test(detail) ? m.syncBusy : m[409];
   return status in m ? m[status as keyof typeof m] : status >= 500 ? m.server : m[400];
 }
 
 async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, withWorkspaceHeader(init)).catch(() => {
-    throw new Error(friendlyError("network"));
+    throw new ApiError(friendlyError("network"), "network");
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(friendlyError(res.status, text));
+    throw new ApiError(friendlyError(res.status, text), res.status);
   }
-  return res.json() as Promise<T>;
+  const raw = await res.text().catch(() => "");
+  // A DELETE answers 204 with no body: that is success, not a parse error.
+  if (!raw.trim()) return undefined as T;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new ApiError(friendlyError(res.status, raw), res.status);
+  }
 }
 
 export function listProfiles() {
   return fetchJSON<Profile[]>("/api/profiles");
 }
 
-export function saveProfile(id: number | null, name: string, avatar: { avatarEmoji?: string | null; avatarColor?: string | null; avatarPet?: import("./profile-avatar").ProfilePip | null } = {}) {
+export function saveProfile(id: number | null, name: string, avatar: { avatarEmoji?: string | null; avatarColor?: string | null; avatarPet?: import("./profile-avatar").ProfilePip | null; avatarPhoto?: string | null } = {}) {
   return fetchJSON<Profile>(id == null ? "/api/profiles" : `/api/profiles/${id}`, {
     method: id == null ? "POST" : "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -298,6 +378,12 @@ export function getTransactions(params: {
   kind?: TransactionKindFilter;
   provider?: string;
   credentialIds?: number[];
+  /** Household member id or "shared": only that member's rows. */
+  owner?: string;
+  /** "1": only rows hidden from totals. */
+  hidden?: string;
+  /** One bank account or card, by its account number. */
+  account?: string;
 }) {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -344,6 +430,46 @@ export function setTransactionExcluded(
   });
 }
 
+export interface PaybackTxn {
+  id: number;
+  date: string;
+  description: string;
+  /** Signed as charged: an expense is negative, a payback credit positive. */
+  amount: number;
+}
+
+export interface PaybackLinkView {
+  credit: PaybackTxn;
+  expense: PaybackTxn;
+}
+
+export interface PaybackState {
+  links: PaybackLinkView[];
+  candidates: PaybackTxn[];
+  /** How much of this expense earlier credits already covered. */
+  coveredAbs: number;
+}
+
+/** The links touching a transaction, plus the rows near it that could still be paired with it. */
+export function getPayback(id: number) {
+  return fetchJSON<PaybackState>(`/api/transactions/${id}/payback`);
+}
+
+/** Pairs a credit with the expense it repays; either id may be the credit. */
+export function linkPayback(id: number, targetId: number) {
+  return fetchJSON<{ success: boolean }>(`/api/transactions/${id}/payback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetId }),
+  });
+}
+
+export function unlinkPayback(creditId: number) {
+  return fetchJSON<{ success: boolean }>(`/api/transactions/${creditId}/payback`, {
+    method: "DELETE",
+  });
+}
+
 export interface ExcludedMerchantRule {
   id: number;
   provider: string;
@@ -367,12 +493,15 @@ export function getSummary(params: {
   from: string;
   to: string;
   months?: number;
+  /** Household member id or "shared": that member's spend only. */
+  owner?: string;
 }) {
   const searchParams = new URLSearchParams({
     from: params.from,
     to: params.to,
   });
   if (params.months) searchParams.set("months", String(params.months));
+  if (params.owner) searchParams.set("owner", params.owner);
   return fetchJSON<DashboardSummary>(`/api/summary?${searchParams}`);
 }
 
@@ -381,7 +510,19 @@ export function getOverview(period: string, offset: number) {
 }
 
 export function getBalanceForecast() {
-  return fetchJSON<{ forecast: import("./balance-forecast").BalanceForecast | null }>(`/api/balance-forecast`);
+  return fetchJSON<{
+    forecast: import("./balance-forecast").BalanceForecast | null;
+    accounts: import("./balance-forecast").BalanceForecastPayload | null;
+  }>(`/api/balance-forecast`);
+}
+
+/** Pins a card's statement to the bank account that pays it; null clears the choice. */
+export function setCardBankLink(card: string, bank: string | null) {
+  return fetchJSON<{ success: boolean }>(`/api/balance-forecast`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ card, bank }),
+  });
 }
 
 export function getCashAhead() {
@@ -389,7 +530,7 @@ export function getCashAhead() {
 }
 
 export function getSuggestions() {
-  return fetchJSON<{ suggestions: import("./suggestions").Suggestion[]; dismissed: string[]; stageHints: import("./stage-detect").StageHint[] }>(`/api/suggestions`);
+  return fetchJSON<{ suggestions: import("./suggestions").Suggestion[]; dismissed: string[]; stageHints: import("./stage-detect").StageHint[]; donations?: { year: number; total: number }[] }>(`/api/suggestions`);
 }
 
 export function dismissSuggestion(key: string) {
@@ -433,6 +574,159 @@ export function getMarkets() {
   return fetchJSON<MarketsPayload>(`/api/markets`);
 }
 
+/** Symbols the household added to Markets. */
+export function getMarketWatchlist() {
+  return fetchJSON<{ symbols: string[] }>(`/api/markets/watchlist`);
+}
+
+export function addMarketSymbol(symbol: string) {
+  return fetchJSON<{ symbol: string }>(`/api/markets/watchlist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ symbol }),
+  });
+}
+
+export function removeMarketSymbol(symbol: string) {
+  return fetchJSON<void>(`/api/markets/watchlist`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ symbol }),
+  });
+}
+
+export function getInsurance() {
+  return fetchJSON<InsurancePayload>(`/api/insurance`);
+}
+
+/** Creates a policy, or updates it when item.id is set. */
+export function saveInsurancePolicy(item: Record<string, unknown>) {
+  return fetchJSON<{ success: boolean; id: number }>(`/api/insurance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ item }),
+  });
+}
+
+export function deleteInsurancePolicy(id: number) {
+  return fetchJSON<{ success: boolean }>(`/api/insurance/${id}`, { method: "DELETE" });
+}
+
+export function uploadInsuranceDocument(policyId: number, file: File, kind: string) {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("kind", kind);
+  return fetchJSON<import("./types").InsuranceDocument>(`/api/insurance/${policyId}/documents`, { method: "POST", body: form });
+}
+
+export function setInsuranceDocumentKind(docId: number, kind: string) {
+  return fetchJSON<{ success: boolean }>(`/api/insurance/documents/${docId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind }),
+  });
+}
+
+export function deleteInsuranceDocument(docId: number) {
+  return fetchJSON<{ success: boolean }>(`/api/insurance/documents/${docId}`, { method: "DELETE" });
+}
+
+/** The stored file as a blob, so a non-default workspace opens the right one. */
+export async function fetchInsuranceDocument(docId: number) {
+  const res = await fetch(`/api/insurance/documents/${docId}`, withWorkspaceHeader()).catch(() => {
+    throw new ApiError(friendlyError("network"), "network");
+  });
+  if (!res.ok) throw new ApiError(friendlyError(res.status, await res.text().catch(() => "")), res.status);
+  return res.blob();
+}
+
+export interface Receipt { id: number; transactionId: number; originalName: string; mime: string; size: number; uploadedAt: string }
+
+export function getReceipts(transactionId: number) {
+  return fetchJSON<{ receipts: Receipt[] }>(`/api/transactions/${transactionId}/receipts`);
+}
+
+export function uploadReceipt(transactionId: number, file: File) {
+  const form = new FormData();
+  form.set("file", file);
+  return fetchJSON<Receipt>(`/api/transactions/${transactionId}/receipts`, { method: "POST", body: form });
+}
+
+export function deleteReceipt(id: number) {
+  return fetchJSON<{ success: boolean }>(`/api/receipts/${id}`, { method: "DELETE" });
+}
+
+/** The stored receipt as a blob, so a non-default workspace opens the right one. */
+export async function fetchReceipt(id: number) {
+  const res = await fetch(`/api/receipts/${id}`, withWorkspaceHeader()).catch(() => {
+    throw new ApiError(friendlyError("network"), "network");
+  });
+  if (!res.ok) throw new ApiError(friendlyError(res.status, await res.text().catch(() => "")), res.status);
+  return res.blob();
+}
+
+/** Rows read from pasted text by the user's AI provider, for the sheet import preview. Nothing is saved. */
+export function extractTextRows(text: string) {
+  return fetchJSON<{ rows: import("./text-import").ExtractedRow[] }>(`/api/import/text`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+}
+
+export function getTrades(assetId: number) {
+  return fetchJSON<{ trades: import("./holding-trades").HoldingTrade[]; summary: { quantity: number; costBasis: number; realized: number } }>(`/api/assets/${assetId}/trades`);
+}
+
+export function addTrade(assetId: number, trade: Omit<import("./holding-trades").HoldingTrade, "id">) {
+  return fetchJSON<import("./holding-trades").HoldingTrade>(`/api/assets/${assetId}/trades`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(trade),
+  });
+}
+
+export function deleteTrade(tradeId: number) {
+  return fetchJSON<{ success: boolean }>(`/api/assets/trades/${tradeId}`, { method: "DELETE" });
+}
+
+export function getPlanned() {
+  return fetchJSON<import("./planned").PlannedPayload>(`/api/planned`);
+}
+
+/** Creates a planned expense, or updates it when item.id is set. */
+export function savePlannedItem(item: Record<string, unknown>) {
+  return fetchJSON<{ success: boolean; id: number }>(`/api/planned`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ item }),
+  });
+}
+
+export function deletePlannedItem(id: number) {
+  return fetchJSON<{ success: boolean }>(`/api/planned/${id}`, { method: "DELETE" });
+}
+
+export function setPlannedItemStatus(id: number, status: "planned" | "matched" | "cancelled") {
+  return fetchJSON<{ success: boolean }>(`/api/planned/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function plannedAction(action: "match" | "link" | "reject" | "unlink", ids: { itemId?: number; txnId?: number } = {}) {
+  return fetchJSON<{ success?: boolean; matched?: number; ambiguous?: number }>(`/api/planned/act`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...ids }),
+  });
+}
+
+export function getPivot(months: number) {
+  return fetchJSON<{ months: string[]; rows: import("./pivot").PivotRow[] }>(`/api/pivot?months=${months}`);
+}
+
 export function getAssets() {
   return fetchJSON<AssetsPayload>(`/api/assets`);
 }
@@ -457,8 +751,16 @@ export function deleteAsset(id: number) {
   return fetchJSON<{ success: boolean }>(`/api/assets/${id}`, { method: "DELETE" });
 }
 
-export function getHome() {
-  return fetchJSON<HomePayload>(`/api/home`);
+/** `owner` (a household member id or "shared") scopes the spend and cash figures to that member. */
+export function getHome(owner?: string, month?: string) {
+  const sp = new URLSearchParams();
+  if (owner) sp.set("owner", owner);
+  if (month) sp.set("month", month);
+  return fetchJSON<HomePayload>(`/api/home${sp.size ? `?${sp}` : ""}`);
+}
+
+export function getNotifications() {
+  return fetchJSON<{ items: import("./notifications").AppNotification[] }>(`/api/notifications`);
 }
 
 export function getActivity() {
@@ -534,6 +836,27 @@ export function getBudgets() {
   return fetchJSON<Budget[]>("/api/budgets");
 }
 
+export function getFlowMatches() {
+  return fetchJSON<import("./flow-matches").FlowMatchView[]>("/api/flow-matches");
+}
+
+/** Undo one automatic pairing; the rows return to their previous classification. */
+export function cancelFlowMatch(id: number) {
+  return fetchJSON<{ success: boolean }>(`/api/flow-matches/${id}`, { method: "DELETE" });
+}
+
+export function getBudgetPeriod(month?: string) {
+  return fetchJSON<import("./finance-period").BudgetPeriodPayload>(`/api/budgets/period${month ? `?month=${month}` : ""}`);
+}
+
+export function setBudgetRollover(categoryId: number, rollover: import("./finance-period").RolloverRule) {
+  return fetchJSON<{ success: boolean }>("/api/budgets/period", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ categoryId, rollover }),
+  });
+}
+
 export function updateBudget(categoryId: number, amount: number | null) {
   return fetchJSON<{ success: boolean }>("/api/budgets", {
     method: "PUT",
@@ -561,6 +884,14 @@ export function updateCategoryDescription(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ description }),
+  });
+}
+
+export function updateCategoryLook(categoryId: number, fields: { name?: string; color?: string }) {
+  return fetchJSON<{ success: boolean }>(`/api/categories/${categoryId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
   });
 }
 
@@ -739,11 +1070,22 @@ export function startSync(
         })
       );
 
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        onEvent({ type: "error", data: { message: friendlyError(res.status, text) } });
+        return;
+      }
+
       const reader = res.body?.getReader();
-      if (!reader) return;
+      if (!reader) {
+        onEvent({ type: "error", data: { message: ERRORS[uiLang()].streamLost } });
+        return;
+      }
 
       const decoder = new TextDecoder();
       let buffer = "";
+      // A stream that stops without "complete" means the sync died mid-way; otherwise the UI spins forever.
+      let settled = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -760,6 +1102,7 @@ export function startSync(
           } else if (line.startsWith("data: ") && currentEvent) {
             try {
               const data = JSON.parse(line.slice(6));
+              if (currentEvent === "complete" || currentEvent === "error") settled = true;
               onEvent({ type: currentEvent as SyncProgressEvent["type"], data });
             } catch {
               // skip malformed JSON
@@ -768,11 +1111,12 @@ export function startSync(
           }
         }
       }
+      if (!settled) onEvent({ type: "error", data: { message: ERRORS[uiLang()].streamLost } });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       onEvent({
         type: "error",
-        data: { message: "Connection to sync service lost" },
+        data: { message: ERRORS[uiLang()].streamLost },
       });
     }
   })();
@@ -780,10 +1124,6 @@ export function startSync(
   return { cancel: () => controller.abort() };
 }
 
-// Placeholder for last sync info
-export function getLastSync() {
-  return fetchJSON<SyncRun | null>("/api/sync/last").catch(() => null);
-}
 
 export interface PullProgress {
   status: string;
@@ -827,8 +1167,16 @@ export function pullOllamaModel(
         })
       );
 
+      if (!res.ok) {
+        onEvent({ type: "error", data: { status: "error", message: friendlyError(res.status, await res.text().catch(() => "")) } });
+        return;
+      }
+
       const reader = res.body?.getReader();
-      if (!reader) return;
+      if (!reader) {
+        onEvent({ type: "error", data: { status: "error", message: ERRORS[uiLang()].streamLost } });
+        return;
+      }
 
       const decoder = new TextDecoder();
       let buffer = "";
@@ -860,7 +1208,7 @@ export function pullOllamaModel(
       if (err instanceof DOMException && err.name === "AbortError") return;
       onEvent({
         type: "error",
-        data: { status: "error", message: "Connection to pull endpoint lost" },
+        data: { status: "error", message: ERRORS[uiLang()].streamLost },
       });
     }
   })();
@@ -893,8 +1241,10 @@ export function createRule(rule: Omit<Rule, "id">) {
 }
 
 export async function deleteRule(id: number) {
-  const res = await fetch(`${BASE}/api/rules/${id}`, withWorkspaceHeader({ method: "DELETE" }));
-  if (!res.ok) throw new Error("Delete failed");
+  const res = await fetch(`${BASE}/api/rules/${id}`, withWorkspaceHeader({ method: "DELETE" })).catch(() => {
+    throw new ApiError(friendlyError("network"), "network");
+  });
+  if (!res.ok) throw new ApiError(friendlyError(res.status, await res.text().catch(() => "")), res.status);
 }
 
 export function searchFunds(source: "gemel" | "pension", q: string) {
@@ -969,6 +1319,26 @@ export function pensionAction(body: Record<string, unknown>) {
 export function deletePension(id: number) {
   return fetchJSON<{ success: boolean }>(`/api/pension?id=${id}`, { method: "DELETE" });
 }
+export type PensionReportRecord = {
+  id: number;
+  asOf: string;
+  member: string;
+  source: string;
+  fileName: string | null;
+  issuedAt: string | null;
+  totalSavings: number;
+  products: number;
+  importedAt: string;
+};
+export function listPensionReports() {
+  return fetchJSON<{ reports: PensionReportRecord[] }>(`/api/pension/report`);
+}
+export function importPensionReport(report: unknown) {
+  return fetchJSON<{ products: number; created: number; updated: number; policies: number; policiesCreated: number; reportId: number }>(
+    `/api/pension/report`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) }
+  );
+}
 
 export function getCashflowHealth() {
   return fetchJSON<{ hasData: boolean; signs: import("./cashflow-health").CashflowSign[]; level: import("./cashflow-health").CashflowLevel; avgIncome: number; avgExpenses: number }>(`/api/cashflow-health`);
@@ -991,6 +1361,22 @@ export function setTransactionTags(id: number, tags: string[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tags }),
   });
+}
+
+export function renameTag(from: string, to: string) {
+  return fetchJSON<{ changed: number }>(`/api/transactions/tags`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from, to }) });
+}
+
+export function deleteTag(tag: string) {
+  return fetchJSON<{ removed: number }>(`/api/transactions/tags?tag=${encodeURIComponent(tag)}`, { method: "DELETE" });
+}
+
+export function getCurrencies() {
+  return fetchJSON<{ base: string; currencies: { currency: string; transactions: number; assets: number; rate: number | null; asOf: string | null; change30d: number | null }[] }>(`/api/currencies`);
+}
+
+export function getMerchants() {
+  return fetchJSON<{ merchants: { merchant: string; count: number; total: number; last: string }[] }>(`/api/transactions/merchants`);
 }
 
 export function setTransactionOwner(id: number, owner: string | null) {
@@ -1023,6 +1409,10 @@ export function setAccountOwner(accountNumber: string, owner: string | null) {
   });
 }
 
+export function getBusinessReport(from: string, to: string) {
+  return fetchJSON<import("@/server/db/queries/business").BusinessReport>(`/api/business?from=${from}&to=${to}`);
+}
+
 export function getCashWallet() {
   return fetchJSON<{ days: number; withdrawn: number; logged: number; balance: number }>(`/api/transactions/cash`);
 }
@@ -1039,16 +1429,81 @@ export function deleteCashExpense(id: number) {
   return fetchJSON<{ success: boolean }>(`/api/transactions/cash?id=${id}`, { method: "DELETE" });
 }
 
-export function importStatement(account: string, rows: { date: string; description: string; amount: number }[], dryRun = false) {
-  return fetchJSON<{ ready: number; duplicates: number; added: number; batchId: number | null }>(`/api/import`, {
+export type ImportSource = "bank" | "card";
+
+export function importStatement(
+  account: string,
+  rows: { date: string; description: string; amount: number }[],
+  dryRun = false,
+  source: ImportSource = "bank",
+) {
+  return fetchJSON<{
+    ready: number;
+    duplicates: number;
+    added: number;
+    batchId: number | null;
+    categorized: number;
+    needsReview: number;
+  }>(`/api/import`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ account, rows, dryRun }),
+    body: JSON.stringify({ account, rows, dryRun, source }),
   });
 }
 
 export function undoStatementImport(batchId: number) {
   return fetchJSON<{ removed: number }>(`/api/import?batch=${batchId}`, { method: "DELETE" });
+}
+
+export interface SheetRowInput {
+  date: string;
+  description: string;
+  amount: number;
+  kind: "expense" | "income";
+  account: string;
+  category?: string;
+  tags?: string[];
+  owner?: string | null;
+  businessSharePct?: number;
+  memo?: string | null;
+}
+
+export interface SheetImportResult {
+  dryRun: boolean;
+  ready: number;
+  added: number;
+  duplicates: number;
+  errors: number;
+  categorized: number;
+  needsReview: number;
+  importId: number | null;
+  batchId: number | null;
+  rows: { index: number; status: "added" | "duplicate" | "error"; code?: string }[];
+}
+
+/** Saves the smart sheet; dryRun only reports duplicates and per-row errors. */
+export function importSheet(rows: SheetRowInput[], dryRun = false) {
+  return fetchJSON<SheetImportResult>(`/api/import/sheet`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows, dryRun }),
+  });
+}
+
+export function undoSheetImport(importId: number) {
+  return fetchJSON<{ removed: number }>(`/api/import/sheet?import=${importId}`, { method: "DELETE" });
+}
+
+/** Category suggestions from merchant memory (never written by the server). */
+export function suggestSheetCategories(rows: { description: string; kind: "expense" | "income" }[]) {
+  return fetchJSON<{ suggestions: { index: number; categoryId: number; name: string; kind: "expense" | "income" }[] }>(
+    `/api/import/sheet/suggest`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    },
+  );
 }
 
 export function getLegacyNotes() {
@@ -1213,6 +1668,7 @@ export function getInstalledAgents() {
 export type ManualTransactionInput = {
   kind?: "expense" | "income"; amount?: number; date?: string; description?: string; categoryId?: number | null;
   account?: string; memo?: string | null; tags?: string[]; owner?: string | null; excluded?: boolean;
+  businessSharePct?: number;
 };
 const jsonInit = (method: string, body?: unknown): RequestInit => ({ method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
 export function createManualTransaction(input: ManualTransactionInput) {
@@ -1223,4 +1679,74 @@ export function updateTransactionFields(id: number, input: ManualTransactionInpu
 }
 export function deleteManualTransaction(id: number) {
   return fetchJSON<{ deleted: ManualTransactionInput }>(`/api/transactions/manual?id=${id}`, jsonInit("DELETE"));
+}
+
+export type { ExpenseShare } from "./expense-shares";
+const jsonBody = (method: string, body: unknown): RequestInit => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export function getShares(transactionId?: number) {
+  return fetchJSON<{ shares: import("./expense-shares").ExpenseShare[] }>(transactionId != null ? `/api/transactions/${transactionId}/shares` : "/api/shares");
+}
+
+export function addShare(transactionId: number, person: string, amount: number) {
+  return fetchJSON<import("./expense-shares").ExpenseShare>(`/api/transactions/${transactionId}/shares`, jsonBody("POST", { person, amount }));
+}
+
+export function setShareSettled(id: number, settled: boolean) {
+  return fetchJSON<{ success: boolean }>(`/api/shares/${id}`, jsonBody("PATCH", { settled }));
+}
+
+export function settleSharePerson(person: string) {
+  return fetchJSON<{ settled: number }>("/api/shares", jsonBody("POST", { settlePerson: person }));
+}
+
+export function deleteShare(id: number) {
+  return fetchJSON<{ success: boolean }>(`/api/shares/${id}`, { method: "DELETE" });
+}
+
+export function getCreditScores() {
+  return fetchJSON<{ scores: import("./credit-score").CreditScore[] }>("/api/credit-scores");
+}
+
+export function addCreditScore(entry: { date: string; score: number; bureau: string; note?: string }) {
+  return fetchJSON<import("./credit-score").CreditScore>("/api/credit-scores", jsonBody("POST", entry));
+}
+
+export function deleteCreditScore(id: number) {
+  return fetchJSON<{ success: boolean }>(`/api/credit-scores/${id}`, { method: "DELETE" });
+}
+
+export function getSavingsDone() {
+  return fetchJSON<{ done: import("./money-on-table").DoneSaving[] }>("/api/savings-done");
+}
+
+export function setSavingDone(key: string, yearly: number, done: boolean) {
+  return fetchJSON<{ success: boolean }>("/api/savings-done", jsonBody("POST", { key, yearly, done }));
+}
+
+export interface SpendChange {
+  compare: "month" | "year";
+  now: { from: string; to: string; total: number };
+  before: { from: string; to: string; total: number };
+  change: number;
+  hasHistory: boolean;
+  drivers: import("./spend-change").Driver[];
+}
+
+export function getSpendChange(compare: "month" | "year") {
+  return fetchJSON<SpendChange>(`/api/spend-change?compare=${compare}`);
+}
+
+export type AutoBackupConfig = import("@/server/lib/auto-backup").AutoBackupConfig;
+
+export function getAutoBackup() {
+  return fetchJSON<AutoBackupConfig>("/api/backup/auto");
+}
+
+export function updateAutoBackup(patch: { enabled?: boolean; frequency?: "daily" | "weekly"; dir?: string; passphrase?: string }) {
+  return fetchJSON<AutoBackupConfig>("/api/backup/auto", jsonBody("PATCH", patch));
+}
+
+export function autoBackupAction(action: "run" | "open") {
+  return fetchJSON<AutoBackupConfig>("/api/backup/auto", jsonBody("POST", { action }));
 }

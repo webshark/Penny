@@ -1,6 +1,9 @@
 /** Pocket Pal: a small household pet whose mood comes from the finances. Pure. */
 
 import { hexToOklch } from "@/lib/category-colors";
+import { PET_SKIN_LOOKS, SKIN_VARIANTS } from "@/lib/pet-skins";
+
+export { PET_SKIN_LOOKS };
 
 export type PetMood = "happy" | "ok" | "hungry" | "caring";
 export type PetStat = "food" | "energy" | "joy" | "health" | "tidy";
@@ -69,19 +72,15 @@ export function petSnooze(snooze: Record<string, string>, key: string, until: st
   return Object.fromEntries([...Object.entries(snooze).filter(([, u]) => u > today), [key, until]]);
 }
 
-export const PET_SIZES = { s: 110, m: 140, l: 170 } as const;
+export const PET_SIZES = { s: 120, m: 180, l: 250 } as const;
 export type PetSize = keyof typeof PET_SIZES;
-/** A few BoopFace skins (full build, loaded only when one is picked). */
-export const PET_SKINS = ["301", "401", "901", "1401", "1601"] as const;
-export const PET_COLORS = ["#0a84ff", "#30d158", "#ff9f0a", "#ff375f", "#bf5af2", "#64d2ff"] as const;
-/** Each look comes in fixed-colour variants (from the BoopFace catalog: id → main colour); the picked colour chooses the variant. */
-const SKIN_VARIANTS: Record<string, Record<string, string>> = {
-  "301": { 301: "#619bff", 302: "#ff6961", 303: "#92ec55", 304: "#b561ff", 305: "#ff61b0", 306: "#ffa159", 307: "#80d9ff", 309: "#ff1f1f", 310: "#27ecbb", 311: "#ffd642", 312: "#61c876" },
-  "401": { 401: "#337aff", 402: "#ff3a33", 403: "#15d42e", 404: "#a033ff", 405: "#ff3392", 406: "#ff862a" },
-  "901": { 902: "#d4a446", 903: "#e19991", 906: "#ff9962", 911: "#86bfdc", 912: "#8ea0ff", 913: "#ce88ff", 914: "#be5f7e", 915: "#76bab7", 916: "#588272" },
-  "1401": { 1401: "#18517c", 1402: "#ab784c", 1403: "#b5809b", 1405: "#ef899e", 1409: "#f5b267", 1411: "#a82d30", 1412: "#ceb574" },
-  "1601": { 1603: "#cfeeb2", 1604: "#ffeaf2", 1605: "#a9c568", 1606: "#45277f", 1608: "#86bfe0", 1609: "#3f648e" },
-};
+/** Every look BoopFace ships, one per series (full build, loaded only when one is picked). */
+export const PET_SKINS: readonly string[] = PET_SKIN_LOOKS.map((l) => l.id);
+/** One swatch per named colour (the order is the row in the picker); anything else goes through the colour input. */
+export const PET_COLORS = [
+  "#0a84ff", "#30d158", "#ff9f0a", "#ff375f", "#bf5af2", "#64d2ff",
+  "#ffd60a", "#5e5ce6", "#00c7be", "#a2845e", "#ff6482", "#8e8e93",
+] as const;
 
 /** The variant of a look closest to the picked colour, so two people with the same look but different colours get different Pips. */
 export function skinFor(skin: string, color: string): string {
@@ -98,7 +97,7 @@ export function skinFor(skin: string, color: string): string {
 }
 
 /** color "" = the theme accent; skin "" = flat color; snooze = issue key → hidden until (YYYY-MM-DD). */
-export interface PetSettings { enabled: boolean; name: string; color: string; size: PetSize; skin: string; snooze: Record<string, string> }
+export interface PetSettings { enabled: boolean; name: string; color: string; size: PetSize; skin: string; snooze: Record<string, string>; /** Head shape, 0 (square) to 100 (round); null keeps the face's own. */ roundness: number | null }
 
 /** On unless the household turned it off. */
 export function parsePet(raw: unknown): PetSettings {
@@ -109,6 +108,7 @@ export function parsePet(raw: unknown): PetSettings {
     color: typeof r.color === "string" && /^#[0-9a-f]{6}$/i.test(r.color) ? r.color.toLowerCase() : "",
     size: typeof r.size === "string" && Object.hasOwn(PET_SIZES, r.size) ? (r.size as PetSize) : "m",
     skin: (PET_SKINS as readonly unknown[]).includes(r.skin) ? String(r.skin) : "",
+    roundness: typeof r.roundness === "number" && Number.isFinite(r.roundness) ? Math.min(100, Math.max(0, Math.round(r.roundness))) : null,
     snooze: Object.fromEntries(Object.entries(r.snooze && typeof r.snooze === "object" ? r.snooze : {})
       .filter(([k, v]) => /^[a-z]+:[a-zA-Z]+$/.test(k) && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)).slice(0, 20)),
   };

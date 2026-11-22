@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lastCompleteMonth, monthRecap, shiftMonth, yearRecap, type RecapInput } from "@/lib/recap";
+import { budgetMonthByKey } from "@/lib/finance-period";
 
 const e = (date: string, amount: number, categoryId: number | null, description = "x") => ({ date, amount, categoryId, description });
 const base: RecapInput = {
@@ -46,5 +47,33 @@ describe("recap", () => {
     expect(r.top.map((x) => x.name)).toEqual(["Food", "Fun"]);
     expect(r.daysCounted).toBe(310);
     expect(r.noSpendDays).toBe(305);
+  });
+
+  describe("household months", () => {
+    // A month that starts on the 10th: key 2026-09 is Sep 10 to Oct 9.
+    const periods = Object.fromEntries(
+      Array.from({ length: 13 }, (_, i) => shiftMonth("2026-01", i)).map((key) => {
+        const r = budgetMonthByKey(10, key);
+        return [key, { from: r.from, to: r.to }];
+      })
+    );
+    const household: RecapInput = {
+      ...base,
+      periods,
+      income: { "2026-10": 5000 },
+      expenses: [e("2026-09-15", 1000, 1), e("2026-10-05", 500, 2), e("2026-10-12", 700, 1), e("2026-11-10", 300, 2)],
+    };
+
+    it("uses the period's dates, not the calendar month", () => {
+      const r = monthRecap("2026-10", household);
+      // Oct 5 belongs to the previous household month; Nov 10 starts the next one.
+      expect(r).toMatchObject({ spent: 700, prevSpent: 1500, income: 5000, kept: 4300 });
+      expect([r.noSpendDays, r.daysCounted]).toEqual([27, 28]);
+    });
+
+    it("buckets a household year by its month keys", () => {
+      const r = yearRecap(2026, household);
+      expect(r).toMatchObject({ spent: 2500, income: 5000, kept: 2500, bestMonth: { month: "2026-10", kept: 4300 } });
+    });
   });
 });

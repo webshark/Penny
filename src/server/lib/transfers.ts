@@ -17,6 +17,7 @@ const BANK_PROVIDERS_SET: ReadonlySet<BankProvider> = new Set<BankProvider>([
   "massad",
   "union",
   "oneZero",
+  "openBanking",
 ]);
 
 export const CREDIT_CARD_PAYMENT_PATTERNS: readonly RegExp[] = [
@@ -26,6 +27,11 @@ export const CREDIT_CARD_PAYMENT_PATTERNS: readonly RegExp[] = [
   // Match כאל / כ.א.ל / כ א ל / כ-א-ל (Israeli abbreviation for Cal credit).
   /כ[\s.\-־]?א[\s.\-־]?ל/i,
   /מקסימום/i,
+  // Max (formerly Leumi Card) bills as "מקס איט פיננסים"; word boundaries don't work on Hebrew, so a bare "מקס" must stand alone.
+  /מקס[\s־-]*איט/i,
+  /(^|\s)מקס(\s|$)/,
+  /לאומי[\s־-]*קארד/i,
+  /אמקס/i,
   /מאסטרקארד/i,
   /אמריקן\s*אקספרס/i,
   /דיינרס/i,
@@ -55,13 +61,22 @@ function matchesTransferPattern(description: string): boolean {
   return CREDIT_CARD_PAYMENT_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
+export interface KindOptions {
+  /**
+   * A connected card scraper whose charges explain this bill. Without one the debit is real
+   * spending: marking it a transfer hid every card month from all totals.
+   */
+  cardExplainsBill?: boolean;
+}
+
 export function detectKind(
   description: string,
   provider: string,
-  chargedAmount: number
+  chargedAmount: number,
+  options: KindOptions = {}
 ): TransactionKind {
   if (isBankProvider(provider) && matchesTransferPattern(description)) {
-    return "transfer";
+    return options.cardExplainsBill ? "transfer" : "expense";
   }
   // A loan landing in the account is borrowed money, not earnings: counting it as income inflates savings.
   if (isBankProvider(provider) && chargedAmount > 0 && LOAN_DEPOSIT.test(description)) {

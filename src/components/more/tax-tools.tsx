@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getSuggestions } from "@/lib/api";
 import { useLocale, useTranslations } from "next-intl";
 import { CardShell } from "@/components/home/card-shell";
 import { NumberField, numberError } from "@/components/ui/number-field";
@@ -71,6 +73,14 @@ export function CreditPointsChecker() {
   const [aliyah, setAliyah] = useState(0);
   const [flags, setFlags] = useState({ singleParent: false, changedJobs: false, qualifyingTown: false });
   const [money, setMoney] = useState({ gross: "15000", donations: "0", lifeInsurance: "0", privatePension: "0" });
+  // Last tax year's donations, found in the transactions, fill the field once (the person can still change it).
+  const lastYear = new Date().getFullYear() - 1;
+  const detected = useQuery({ queryKey: ["suggestions"], queryFn: getSuggestions }).data?.donations?.find((d) => d.year === lastYear)?.total;
+  const [prefilled, setPrefilled] = useState(false);
+  if (!prefilled && detected && money.donations === "0") {
+    setPrefilled(true);
+    setMoney({ ...money, donations: String(detected) });
+  }
 
   const r = creditCheck({
     sex, children: kids.map(num), degree, service, aliyahYear: aliyah, ...flags,
@@ -116,7 +126,9 @@ export function CreditPointsChecker() {
         <section className={group} aria-labelledby="cp-paid">
           <h2 id="cp-paid" className={groupTitle}>{t("paid")}</h2>
           <div className="grid grid-cols-1 gap-4 min-[22rem]:grid-cols-2 md:grid-cols-3">
-            {moneyField("donations")}{moneyField("lifeInsurance")}{moneyField("privatePension")}
+            {moneyField("donations")}
+            {prefilled && <p className="text-xs text-muted-foreground">{t("donationsDetected", { year: lastYear })}</p>}
+            {moneyField("lifeInsurance")}{moneyField("privatePension")}
           </div>
         </section>
       </div>

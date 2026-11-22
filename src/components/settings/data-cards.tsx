@@ -141,7 +141,7 @@ export function DangerZone() {
             >
               <X className="size-4" aria-hidden />
             </IconButton>
-            <IconButton
+            <IconButton showLabel
               label={mutation.isPending ? tCommon("deleting") : t("deleteEverything")}
               variant="default"
               disabled={!canConfirm || mutation.isPending}

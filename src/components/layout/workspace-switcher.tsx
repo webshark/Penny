@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { profileName } from "@/lib/profile-avatar";
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, Users } from "lucide-react";
+import { Accessibility, Check, ChevronsUpDown, LifeBuoy, Lock, RefreshCw, Settings, Users } from "lucide-react";
+import { useA11y } from "@/components/a11y/a11y-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,13 +62,20 @@ export function useProfiles() {
   return { ...query, profiles, active: active ?? profiles[0], activeId };
 }
 
-export function WorkspaceSwitcher({ side = "top" }: { side?: "top" | "bottom" }) {
+/**
+ * The profile button at the sidebar's foot: switch profile, then accessibility, settings,
+ * help and the app lock in one menu. Shown even with one profile, since it now carries those tools.
+ */
+/** The bank sync line in the profile menu: its sentence, its tone dot, whether it is running, and whether it needs a look. */
+export type SyncLine = { label: string; dot: string; busy: boolean; alert: boolean };
+
+export function WorkspaceSwitcher({ side = "top", onSettings, onLock, sync }: { side?: "top" | "bottom"; onSettings?: () => void; onLock?: () => void; sync?: SyncLine }) {
+  const tm = useTranslations("profileMenu");
+  const a11y = useA11y();
   const router = useRouter();
   const tp = useTranslations("profiles");
   const switchProfile = useSwitchProfile();
   const { profiles: workspaces, active, activeId } = useProfiles();
-  // One profile is the common case: nothing to switch to, so keep the sidebar quiet. /profiles can add another.
-  if (workspaces.length < 2) return null;
 
   return (
     <SidebarMenu>
@@ -84,7 +92,11 @@ export function WorkspaceSwitcher({ side = "top" }: { side?: "top" | "bottom" })
           >
             {active ? (
               // The menu button shrinks every svg to 16px; the avatar art must fill its 28px box.
-              <ProfileAvatar profile={active} className="size-7 text-base [&_svg]:size-full!" />
+              <span className="relative shrink-0">
+                <ProfileAvatar profile={active} className="size-7 text-base [&_svg]:size-full!" />
+                {/* A failed or stale sync shows on the avatar, since its line now lives in this menu. */}
+                {sync?.alert && <span aria-hidden className={`absolute -end-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-sidebar ${sync.dot}`} />}
+              </span>
             ) : (
               <div className="size-7 shrink-0 rounded-[28%] bg-primary" />
             )}
@@ -102,7 +114,7 @@ export function WorkspaceSwitcher({ side = "top" }: { side?: "top" | "bottom" })
             sideOffset={8}
             className="min-w-[14rem]"
           >
-            {workspaces.map((w) => (
+            {workspaces.length > 1 && workspaces.map((w) => (
               <DropdownMenuItem
                 key={w.id}
                 onClick={() => switchProfile(w)}
@@ -115,11 +127,23 @@ export function WorkspaceSwitcher({ side = "top" }: { side?: "top" | "bottom" })
                 ) : null}
               </DropdownMenuItem>
             ))}
-            <DropdownMenuSeparator />
+            {workspaces.length > 1 && <DropdownMenuSeparator />}
+            {sync && <>
+              <DropdownMenuItem onClick={() => router.push("/settings/bank")} className="gap-2">
+                <RefreshCw className={`size-4 ${sync.busy ? "motion-safe:animate-spin" : ""}`} />
+                <span className="flex-1">{sync.label}</span>
+                <span aria-hidden className={`size-2 shrink-0 rounded-full ${sync.dot}`} />
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>}
             <DropdownMenuItem onClick={() => router.push("/profiles")} className="gap-2">
               <Users className="size-4" />
               {tp("manage")}
             </DropdownMenuItem>
+            {onSettings && <DropdownMenuItem onClick={onSettings} className="gap-2"><Settings className="size-4" />{tm("settings")}</DropdownMenuItem>}
+            <DropdownMenuItem onClick={() => a11y.setOpen(true)} className="gap-2"><Accessibility className="size-4" />{tm("accessibility")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/help")} className="gap-2"><LifeBuoy className="size-4" />{tm("help")}</DropdownMenuItem>
+            {onLock && <><DropdownMenuSeparator /><DropdownMenuItem onClick={onLock} className="gap-2 text-expense"><Lock className="size-4" />{tm("lock")}</DropdownMenuItem></>}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

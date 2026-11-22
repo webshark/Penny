@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isLanEnabled, setLanEnabled } from "@/server/lib/lan-access";
 import { cookies } from "next/headers";
 import {
   IDLE_CHOICES, SESSION_COOKIE, changeLock, checkSecret, createSession, disableLock, enableLock,
@@ -38,6 +39,11 @@ export async function POST(request: Request) {
   const current = body.current as string;
   if (body.action === "disable") {
     await disableLock(current);
+    // Phone access is allowed only behind the lock: without it, anyone on the network could reach the data.
+    if (isLanEnabled()) {
+      setLanEnabled(false);
+      if (process.env.PENNY_LISTEN_HOST === "0.0.0.0" && process.env.PENNY_RESTARTABLE === "1") setTimeout(() => process.exit(75), 300);
+    }
     return withSession(NextResponse.json({ ok: true }), request, null);
   }
   const next = typeof body.secret === "string" && body.secret !== "" ? body.secret : null;

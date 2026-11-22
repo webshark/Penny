@@ -24,7 +24,8 @@ export default async function HelpPage() {
           <ol className="mt-4 list-decimal space-y-3 ps-5 marker:font-semibold marker:text-primary leading-6">
             {STEPS.map((s) => <li key={s}><span className="font-semibold">{t(`step_${s}_title`)}</span><span className="block text-muted-foreground">{t(`step_${s}_body`)}</span></li>)}
           </ol>
-          <Link href="/setup?force=1" className={`${buttonVariants({ variant: "ghost" })} mt-4`}>{tOn("reopen")}</Link>
+          {/* A ghost button that may wrap: the label is a full sentence and does not fit on one line at 320. */}
+          <Link href="/setup?force=1" className="mt-4 inline-flex min-h-11 max-w-full items-center justify-center rounded-full px-5 py-2 text-center text-sm leading-5 font-medium text-primary transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none">{tOn("reopen")}</Link>
         </section>
 
         <section className={section} aria-labelledby="help-concepts">

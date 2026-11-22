@@ -1,6 +1,7 @@
 import "server-only";
 
 import { runAllWorkspaces } from "@/server/sync/orchestrator";
+import { SyncBusyError } from "@/server/sync/lock";
 import { getGlobalSetting } from "@/server/db/queries/settings";
 import { redactError } from "@/server/lib/redact";
 import { isKeyLocked } from "@/server/lib/encryption";
@@ -142,7 +143,8 @@ async function fire(): Promise<void> {
     await runAllWorkspaces(undefined, undefined, "scheduled");
     console.log("[scheduler] done");
   } catch (err) {
-    console.error("[scheduler] run failed:", redactError(err));
+    if (err instanceof SyncBusyError) console.warn("[scheduler] skip fire — a sync is already running");
+    else console.error("[scheduler] run failed:", redactError(err));
   } finally {
     state.running = false;
     armNext();

@@ -145,10 +145,10 @@ export function BudgetsStep({ onComplete, onBack }: BudgetsStepProps) {
       </div>
 
       <footer className="flex items-center justify-between pt-2">
-        <IconButton label={t("aiBackButton")} variant="outline" onClick={onBack} disabled={saving}>
+        <IconButton showLabel label={t("aiBackButton")} variant="outline" onClick={onBack} disabled={saving}>
           <Back />
         </IconButton>
-        <IconButton label={saving ? t("aiSavingButton") : t("aiContinueButton")} variant="default" onClick={() => finish(true)} disabled={saving || isLoading}>
+        <IconButton showLabel label={saving ? t("aiSavingButton") : t("aiContinueButton")} variant="default" onClick={() => finish(true)} disabled={saving || isLoading}>
           <Forward />
         </IconButton>
       </footer>

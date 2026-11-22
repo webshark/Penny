@@ -3,7 +3,7 @@ export type WidgetId = typeof WIDGETS[number];
 export type Tile = { id: WidgetId; wide: boolean; tall: boolean; visible: boolean };
 export type LayoutPreset = "daily" | "planning" | "minimal";
 export function presetLayout(preset: LayoutPreset): Tile[] {
-  const featured: WidgetId[] = preset === "planning" ? ["planner", "goals", "cashFlow", "bills"] : preset === "minimal" ? ["bills", "needsAttention"] : ["thisMonth", "bills", "goals", "needsAttention"];
+  const featured: WidgetId[] = preset === "planning" ? ["planner", "goals", "cashFlow", "bills"] : preset === "minimal" ? ["bills", "needsAttention"] : ["needsAttention", "thisMonth", "historicalTrend", "recentTransactions", "categories", "bills", "goals", "bankHealth"];
   return [...featured, ...WIDGETS.filter(id => !featured.includes(id))].map(id => ({ id, wide: id === "planner" || id === "categories", tall: false, visible: featured.includes(id) || preset === "daily" && ["recentTransactions", "bankHealth"].includes(id) }));
 }
 export function parseLayout(raw: unknown): Tile[] {

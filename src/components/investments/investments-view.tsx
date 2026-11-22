@@ -1,5 +1,7 @@
 "use client";
 
+import { accountLabel } from "@/lib/i18n-data";
+import { studyFundLiquidFrom } from "@/lib/study-fund";
 import { usePlan } from "@/hooks/use-plan";
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -100,7 +102,7 @@ function Body({ data, onEdit, actions }: { data: AssetsPayload; onEdit: (a: Asse
       <div className="grid gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-3">
         <div className="md:col-span-2 lg:col-span-1"><Benchmarks data={data} /></div>
         <Allocation title={t("byType")} parts={groupBy(owned, (a) => t(`type_${a.type}`))} />
-        <Allocation title={t("byCurrency")} parts={groupBy(owned, (a) => a.currency)} />
+        <Allocation title={t("byCurrency")} parts={groupBy(owned, (a) => currencyName(a.currency, locale))} />
       </div>
 
       {owed.length > 0 && <HoldingsList title={t("liabilitiesTitle")} assets={owed} onEdit={onEdit} />}
@@ -175,6 +177,8 @@ function Benchmarks({ data }: { data: AssetsPayload }) {
 
 function HoldingsList({ title, assets, onEdit, action }: { title: string; assets: Asset[]; onEdit: (a: Asset) => void; action?: ReactNode }) {
   const t = useTranslations("investments");
+  const tBanks = useTranslations("banks");
+  const label = (a: Asset) => accountLabel(a, tBanks);
   const locale = useLocale();
   const queryClient = useQueryClient();
   // Delete at once and offer Undo, instead of asking "are you sure?" first.
@@ -182,7 +186,7 @@ function HoldingsList({ title, assets, onEdit, action }: { title: string; assets
     mutationFn: (a: Asset) => deleteAsset(a.id),
     onSuccess: (_, a) => {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
-      toast.success(t("deletedName", { name: a.name }), {
+      toast.success(t("deletedName", { name: label(a) }), {
         action: {
           label: t("undo"),
           onClick: () =>
@@ -199,20 +203,22 @@ function HoldingsList({ title, assets, onEdit, action }: { title: string; assets
         {assets.map((a) => (
           <li key={a.id} className="flex items-center gap-x-3 py-3 sm:gap-x-4">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-footnote font-medium" title={a.name}>{a.name}</p>
+              <p className="truncate text-footnote font-medium" title={label(a)}>{label(a)}</p>
               <p className="text-caption text-pretty text-muted-foreground">
                 {t(`type_${a.type}`)}
                 {a.symbol && a.quantity != null && (
                   <> · <span dir="ltr">{fmt(a.quantity, locale, a.quantity % 1 ? 2 : 0)} × {a.symbol}</span></>
                 )}
-                {!a.liquid && !a.isLiability && <> · {t("illiquid")}</>}
+                {a.type === "study_fund" && a.purchaseMonth && !a.liquid
+                  ? <> · {t("liquidFrom", { date: new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(`${studyFundLiquidFrom(a.purchaseMonth)}-15T12:00:00`)) })}</>
+                  : !a.liquid && !a.isLiability && <> · {t("illiquid")}</>}
                 {a.quote?.stale && <> · {t("stalePrice")}</>}
                 {a.source === "bank" && <> · {t("fromBank")}</>}
               </p>
               {a.estimate && <HomeEstimate asset={a} />}
             </div>
             {a.quote && a.quote.series.length > 1 && (
-              <Sparkline values={a.quote.series} color="var(--chart-1)" label={t("priceTrend", { name: a.name })} fitToRange className="hidden h-7 w-20 sm:block" />
+              <Sparkline values={a.quote.series} color="var(--chart-1)" label={t("priceTrend", { name: label(a) })} fitToRange className="hidden h-7 w-20 sm:block" />
             )}
             <div className="shrink-0 text-end">
               <p className={cn("text-footnote font-semibold tabular-nums", a.isLiability && "text-status-over")}>
@@ -222,17 +228,18 @@ function HoldingsList({ title, assets, onEdit, action }: { title: string; assets
                 {a.quote?.changeDay != null && (
                   <span className={a.quote.changeDay >= 0 ? "text-status-on-track" : "text-status-over"}>{pct(a.quote.changeDay)} </span>
                 )}
-                {a.gainIls != null && <span>{shekels(a.gainIls, locale)}</span>}
+                {a.gainIls != null && <span title={a.fxGainIls != null ? t("gainSplit", { price: shekels(a.gainIls - a.fxGainIls, locale), fx: shekels(a.fxGainIls, locale) }) : undefined}>{shekels(a.gainIls, locale)}</span>}
+                {a.fxGainIls != null && <span className="block" dir="auto">{t("fxPart", { amount: shekels(a.fxGainIls, locale) })}</span>}
               </p>
             </div>
             <div className={cn("-me-2 flex shrink-0", a.source === "bank" && "invisible")} aria-hidden={a.source === "bank" || undefined}>
-              <Button variant="ghost" size="icon" aria-label={t("editAsset", { name: a.name })} onClick={() => onEdit(a)}>
+              <Button variant="ghost" size="icon" aria-label={t("editAsset", { name: label(a) })} onClick={() => onEdit(a)}>
                 <Pencil className="size-4" aria-hidden />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={t("deleteAsset", { name: a.name })}
+                aria-label={t("deleteAsset", { name: label(a) })}
                 disabled={remove.isPending}
                 onClick={() => remove.mutate(a)}
               >
@@ -274,3 +281,8 @@ function HomeEstimate({ asset }: { asset: Asset }) {
 }
 
 const usePlanSimple = () => usePlan().plan.simpleMode;
+
+/** "שקל חדש" / "US Dollar" instead of a bare ISO code; the code itself when the browser has no name for it. */
+function currencyName(code: string, locale: string): string {
+  try { return new Intl.DisplayNames([locale], { type: "currency" }).of(code) ?? code; } catch { return code; }
+}

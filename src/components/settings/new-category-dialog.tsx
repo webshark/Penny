@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { childColor, familySwatches } from "@/lib/category-colors";
 import type { Category, CategoryKind } from "@/lib/types";
 
-const COLORS = [
+export const CATEGORY_COLORS = [
   "#81B482", "#E89B80", "#65AFD2", "#DCB87A", "#E499A4", "#75BCA3",
   "#94A0DD", "#AB9DDB", "#D5A4D7", "#E5D080", "#A57B5B", "#A2AAC2",
 ];
@@ -40,11 +40,14 @@ export function NewCategoryDialog({
   onOpenChange,
   kind,
   onCreated,
+  defaultGroup,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   kind: CategoryKind;
   onCreated?: (category: Category) => void;
+  /** Opens with this group chosen ("Add subcategory" from a group's menu). */
+  defaultGroup?: number;
 }) {
   const t = useTranslations("settings.categories");
   const tc = useTranslations("common");
@@ -58,8 +61,8 @@ export function NewCategoryDialog({
   const [name, setName] = useState("");
   const [k, setK] = useState<CategoryKind>(kind);
   const [icon, setIcon] = useState("circle-dot");
-  const [color, setColor] = useState(COLORS[0]);
-  const [group, setGroup] = useState(NO_GROUP);
+  const [color, setColor] = useState(CATEGORY_COLORS[0]);
+  const [group, setGroup] = useState(defaultGroup != null ? String(defaultGroup) : NO_GROUP);
 
   const trimmed = name.trim();
   const duplicate = categories.some(
@@ -72,11 +75,11 @@ export function NewCategoryDialog({
   );
   const parent = groups.find((g) => String(g.id) === group);
   // Under a group, offer its color family and preselect the next shade.
-  const swatches = parent ? familySwatches(parent.color) : COLORS;
+  const swatches = parent ? familySwatches(parent.color) : CATEGORY_COLORS;
   const pickGroup = (v: string) => {
     setGroup(v);
     const p = groups.find((g) => String(g.id) === v);
-    setColor(p ? childColor(p.color, categories.filter((c) => c.parentId === p.id).length) : COLORS[0]);
+    setColor(p ? childColor(p.color, categories.filter((c) => c.parentId === p.id).length) : CATEGORY_COLORS[0]);
   };
 
   const mutation = useMutation({

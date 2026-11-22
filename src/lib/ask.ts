@@ -1,5 +1,7 @@
 /** "Ask your money": a small rule-based Hebrew/English question parser. No AI. */
 
+import { budgetMonthByKey, budgetMonthRange, shiftBudgetMonthKey } from "./finance-period";
+
 export type AskIntent = "spent" | "income" | "biggest" | "untilPayday" | "subscriptions" | "savings";
 
 export interface AskPeriod {
@@ -25,7 +27,11 @@ export interface AskCategory {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const monthRange = (y: number, m: number) => ({ from: iso(new Date(y, m, 1)), to: iso(new Date(y, m + 1, 0)) });
+/** The first household month of the quarter holding `key`. */
+const quarterStartKey = (key: string) => {
+  const [year, month] = key.split("-").map(Number);
+  return `${year}-${pad(Math.floor((month - 1) / 3) * 3 + 1)}`;
+};
 
 const HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
 const EN_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -47,34 +53,54 @@ export function variants(word: string): string[] {
   return [...new Set(forms)];
 }
 
-export function parsePeriod(q: string, today: Date): AskPeriod {
-  const y = today.getFullYear();
-  const m = today.getMonth();
+/**
+ * The period a question means, in household months that start on `startDay` (1 for calendar
+ * months), so "last month" is the same range the budget screen uses.
+ */
+export function parsePeriod(q: string, today: Date, startDay = 1): AskPeriod {
   const t = iso(today);
+  const current = budgetMonthRange(startDay, t);
+  const key = current.key;
+  const year = Number(key.slice(0, 4));
+  const monthIndex = Number(key.slice(5, 7)) - 1;
   const lastN = q.match(/(\d+)\s*(?:החודשים|חודשים|months)/);
   if (lastN) {
     const n = Math.max(1, Math.min(36, Number(lastN[1])));
-    return { from: iso(new Date(y, m - n + 1, 1)), to: t, explicit: true };
+    return { from: budgetMonthRange(startDay, t, -(n - 1)).from, to: t, explicit: true };
   }
   if (/היום|today/.test(q)) return { from: t, to: t, explicit: true };
-  if (/השבוע|this week/.test(q)) return { from: iso(new Date(y, m, today.getDate() - today.getDay())), to: t, explicit: true };
-  if (/חודש שעבר|החודש הקודם|last month|previous month/.test(q)) return { ...monthRange(y, m - 1), explicit: true };
-  if (/רבעון שעבר|הרבעון הקודם|last quarter/.test(q)) {
-    const s = Math.floor(m / 3) * 3 - 3;
-    return { from: iso(new Date(y, s, 1)), to: iso(new Date(y, s + 3, 0)), explicit: true };
+  if (/השבוע|this week/.test(q)) return { from: iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay())), to: t, explicit: true };
+  if (/חודש שעבר|החודש הקודם|last month|previous month/.test(q)) {
+    const previous = budgetMonthRange(startDay, t, -1);
+    return { from: previous.from, to: previous.to, explicit: true };
   }
-  if (/רבעון|quarter/.test(q)) return { from: iso(new Date(y, Math.floor(m / 3) * 3, 1)), to: t, explicit: true };
-  if (/שנה שעברה|השנה הקודמת|last year/.test(q)) return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31`, explicit: true };
-  if (/השנה|this year|year to date/.test(q)) return { from: `${y}-01-01`, to: t, explicit: true };
+  if (/רבעון שעבר|הרבעון הקודם|last quarter/.test(q)) {
+    const start = quarterStartKey(key);
+    return {
+      from: budgetMonthByKey(startDay, shiftBudgetMonthKey(start, -3)).from,
+      to: budgetMonthByKey(startDay, shiftBudgetMonthKey(start, -1)).to,
+      explicit: true,
+    };
+  }
+  if (/רבעון|quarter/.test(q)) return { from: budgetMonthByKey(startDay, quarterStartKey(key)).from, to: t, explicit: true };
+  if (/שנה שעברה|השנה הקודמת|last year/.test(q)) {
+    return {
+      from: budgetMonthByKey(startDay, `${year - 1}-01`).from,
+      to: budgetMonthByKey(startDay, `${year - 1}-12`).to,
+      explicit: true,
+    };
+  }
+  if (/השנה|this year|year to date/.test(q)) return { from: budgetMonthByKey(startDay, `${year}-01`).from, to: t, explicit: true };
   const words = q.split(" ");
   for (let i = 0; i < 12; i++) {
     if (words.some((w) => variants(w).includes(HE_MONTHS[i])) || words.includes(EN_MONTHS[i])) {
-      const year = i <= m ? y : y - 1;
-      return { ...monthRange(year, i), ...(year === y && i === m ? { to: t } : {}), explicit: true };
+      const named = `${i <= monthIndex ? year : year - 1}-${pad(i + 1)}`;
+      const range = budgetMonthByKey(startDay, named);
+      return { from: range.from, to: named === key ? t : range.to, explicit: true };
     }
   }
-  if (/החודש|this month/.test(q)) return { from: iso(new Date(y, m, 1)), to: t, explicit: true };
-  return { from: iso(new Date(y, m, 1)), to: t, explicit: false };
+  if (/החודש|this month/.test(q)) return { from: current.from, to: t, explicit: true };
+  return { from: current.from, to: t, explicit: false };
 }
 
 function parseIntent(q: string): AskIntent | null {
@@ -93,9 +119,15 @@ const STOP = new Set(
 );
 
 /** Parse a question. `descriptions` are the workspace's transaction descriptions, used for merchant matching. */
-export function parseQuestion(question: string, today: Date, categories: AskCategory[], descriptions: string[]): ParsedQuestion {
+export function parseQuestion(
+  question: string,
+  today: Date,
+  categories: AskCategory[],
+  descriptions: string[],
+  startDay = 1
+): ParsedQuestion {
   const q = normalize(question);
-  const period = parsePeriod(q, today);
+  const period = parsePeriod(q, today, startDay);
   let intent = parseIntent(q);
   const words = q.split(" ").filter((w) => !STOP.has(w) && !/^\d+$/.test(w));
   const result: ParsedQuestion = { intent, period };

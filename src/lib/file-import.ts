@@ -1,4 +1,5 @@
-import { parseAmount, parseCsv } from "@/lib/csv";
+import { decodeStatementText, parseAmount, parseCsv, sniffFileKind } from "@/lib/csv";
+import { roundCents } from "@/lib/money";
 import { readXlsx } from "@/lib/xlsx";
 
 /** Bank / credit-card statement import: header detection, column mapping and row parsing. */
@@ -10,11 +11,11 @@ export const MAX_IMPORT_ROWS = 5000;
 
 // Most specific first: the first keyword that matches a column wins for that field.
 const KEYWORDS: Record<ImportField, string[]> = {
-  date: ["תאריך עסקה", "תאריך רכישה", "תאריך", "תאריך ערך", "תאריך חיוב", "date", "transaction date"],
-  description: ["שם בית העסק", "בית עסק", "שם בית עסק", "תיאור", "תאור", "תיאור התנועה", "פרטים", "description", "merchant", "details"],
-  amount: ["סכום חיוב", "סכום החיוב", "סכום", "סכום עסקה", "סכום העסקה", "amount", "charge amount"],
-  debit: ["חובה", "בחובה", "debit"],
-  credit: ["זכות", "בזכות", "credit"],
+  date: ["תאריך עסקה", "תאריך רכישה", "תאריך תנועה", "תאריך פעולה", "תאריך", "תאריך ערך", "תאריך חיוב", "transaction date", "posting date", "date"],
+  description: ["שם בית העסק", "בית עסק", "שם בית עסק", "שם העסק", "תיאור התנועה", "תאור התנועה", "תיאור הפעולה", "פרטי התנועה", "תיאור", "תאור", "פרטים", "merchant name", "description", "merchant", "payee", "details"],
+  amount: ["סכום חיוב", "סכום החיוב", "סכום עסקה", "סכום העסקה", "סכום התנועה", "סכום", "charge amount", "transaction amount", "amount"],
+  debit: ["חובה", "בחובה", "חיוב", "debit", "withdrawal"],
+  credit: ["זכות", "בזכות", "credit", "deposit"],
 };
 const HEADER_WORDS = [...Object.values(KEYWORDS).flat(), "יתרה", "balance"];
 
@@ -55,8 +56,13 @@ const iso = (y: number, m: number, d: number) => {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d ? dt.toISOString().slice(0, 10) : null;
 };
 
-/** dd/mm/yyyy, dd.mm.yy, dd-mm-yyyy, yyyy-mm-dd or an Excel date serial -> "yyyy-mm-dd", or null. */
-export function parseImportDate(s: string | undefined): string | null {
+export type DateOrder = "dmy" | "mdy";
+
+/**
+ * dd/mm/yyyy, dd.mm.yy, dd-mm-yyyy, yyyy-mm-dd, mm/dd/yyyy (with `order`) or an Excel date
+ * serial -> "yyyy-mm-dd", or null.
+ */
+export function parseImportDate(s: string | undefined, order: DateOrder = "dmy"): string | null {
   const t = (s ?? "").trim();
   if (/^\d{5}(\.\d+)?$/.test(t)) {
     const n = Math.floor(Number(t));
@@ -68,7 +74,52 @@ export function parseImportDate(s: string | undefined): string | null {
   m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})\b/.exec(t);
   if (!m) return null;
   const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
-  return iso(y, +m[2], +m[1]);
+  return order === "mdy" ? iso(y, +m[1], +m[2]) : iso(y, +m[2], +m[1]);
+}
+
+/**
+ * Whether a file lists dates day-first or month-first. A value above 12 in the first position
+ * proves day-first; above 12 in the second proves month-first.
+ */
+export function detectDateOrder(values: string[]): DateOrder {
+  let dmy = 0;
+  let mdy = 0;
+  for (const value of values) {
+    const m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})\b/.exec(value.trim());
+    if (!m) continue;
+    const first = Number(m[1]);
+    const second = Number(m[2]);
+    if (first === second) continue;
+    if (first > 12) dmy++;
+    else if (second > 12) mdy++;
+  }
+  return mdy > dmy ? "mdy" : "dmy";
+}
+
+/** Raw amounts in a column, before any sign convention is applied. */
+export function scanAmounts(body: string[][], map: ImportMap): number[] {
+  const col = map.amount ?? map.debit ?? map.credit;
+  const out: number[] = [];
+  if (col == null) return out;
+  for (const row of body) {
+    const n = parseAmount(row[col]);
+    if (n != null && n !== 0) out.push(n);
+  }
+  return out;
+}
+
+/**
+ * Card statements list charges as positive; bank statements list them as negative. If the file has
+ * any negative amount, spending is negative and positive values are incomes or refunds.
+ */
+export function inferPositiveIsExpense(amounts: number[]): boolean {
+  return !amounts.some((n) => n < 0);
+}
+
+/** Fallback when no row looks like a header: the first row with at least two non-empty cells. */
+export function fallbackHeaderRow(table: string[][]): number {
+  const i = table.findIndex((row) => row.filter((c) => c.trim() !== "").length >= 2);
+  return i >= 0 ? i : 0;
 }
 
 /**
@@ -76,12 +127,12 @@ export function parseImportDate(s: string | undefined): string | null {
  * statement lists spending as positive, so `positiveIsExpense` flips it. A later header row
  * (card exports list domestic, then abroad, each with its own header) re-maps the columns below it.
  */
-export function buildImportRows(body: string[][], map: ImportMap, positiveIsExpense: boolean): { rows: ImportRow[]; skipped: number } {
+export function buildImportRows(body: string[][], map: ImportMap, positiveIsExpense: boolean, dateOrder: DateOrder = "dmy"): { rows: ImportRow[]; skipped: number } {
   const rows: ImportRow[] = [];
   let skipped = 0;
   for (const r of body) {
     if (headerHits(r) >= 2) { map = guessColumns(r); continue; }
-    const date = map.date == null ? null : parseImportDate(r[map.date]);
+    const date = map.date == null ? null : parseImportDate(r[map.date], dateOrder);
     const description = map.description == null ? "" : (r[map.description] ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
     let amount: number | null = null;
     if (map.amount != null) {
@@ -93,7 +144,7 @@ export function buildImportRows(body: string[][], map: ImportMap, positiveIsExpe
       amount = d == null && c == null ? null : (c ?? 0) - Math.abs(d ?? 0);
     }
     if (!date || !description || amount == null || amount === 0) { skipped++; continue; }
-    rows.push({ date, description, amount: Math.round(amount * 100) / 100 });
+    rows.push({ date, description, amount: roundCents(amount) });
   }
   return { rows, skipped };
 }
@@ -155,22 +206,35 @@ export const IMPORT_FORMATS = [
 ] as const;
 export const IMPORT_EXTS: readonly string[] = IMPORT_FORMATS.map((f) => f.ext);
 
-/** Raw rows of a statement file. Throws "xlsNotSupported" for a real legacy binary .xls. */
+/** Raw rows of a statement file. Throws "pdf"/"xlsNotSupported" for formats that need converting. */
 export async function readStatementTable(bytes: Uint8Array, name: string): Promise<string[][]> {
-  // Some .xls downloads are really .xlsx; check the zip signature, not the name.
-  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return readXlsx(bytes);
-  // Israeli bank CSVs are often Windows-1255, not UTF-8.
-  let text = new TextDecoder("utf-8").decode(bytes);
-  if (text.includes("�")) text = new TextDecoder("windows-1255").decode(bytes);
+  // Names lie: some .xls downloads are really .xlsx, and some "Excel" files are HTML tables.
+  const kind = sniffFileKind(bytes);
+  if (kind === "xlsx") return readXlsx(bytes);
+  if (kind === "pdf") throw new Error("pdf");
+  // Israeli bank CSVs are often UTF-16 (Excel "Unicode text") or Windows-1255, not UTF-8.
+  const text = decodeStatementText(bytes);
   if (/<table/i.test(text)) return parseHtmlTable(text);
-  if (name.toLowerCase().endsWith(".xls")) throw new Error("xlsNotSupported");
+  if (kind === "xls" || name.toLowerCase().endsWith(".xls")) throw new Error("xlsNotSupported");
   return parseCsv(text);
 }
 
+export interface StatementImport {
+  rows: ImportRow[];
+  skipped: number;
+  /** Card statements read their own sign; "bank" keeps it, so a refund stays an expense. */
+  source: "bank" | "card";
+}
+
 /** File → transactions with the auto-detected columns (the unattended folder import). Throws "noHeader". */
-export async function statementRows(bytes: Uint8Array, name: string, positiveIsExpense = true) {
+export async function statementRows(bytes: Uint8Array, name: string): Promise<StatementImport> {
   const table = await readStatementTable(bytes, name);
   const h = findHeaderRow(table);
   if (h < 0) throw new Error("noHeader");
-  return buildImportRows(table.slice(h + 1), guessColumns(table[h]), positiveIsExpense);
+  const map = guessColumns(table[h]);
+  const body = table.slice(h + 1);
+  const dates = map.date == null ? [] : body.map((r) => r[map.date!] ?? "");
+  const positiveIsExpense = inferPositiveIsExpense(scanAmounts(body, map));
+  const { rows, skipped } = buildImportRows(body, map, positiveIsExpense, detectDateOrder(dates));
+  return { rows, skipped, source: positiveIsExpense ? "card" : "bank" };
 }

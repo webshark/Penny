@@ -4,6 +4,7 @@ import {
   setCategoryParent,
   updateCategoryBudgetMode,
   updateCategoryDescription,
+  updateCategoryLook,
   updateCategorySpendingType,
 } from "@/server/db/queries/categories";
 import type { CostType, NeedType } from "@/lib/types";
@@ -35,9 +36,25 @@ export async function PATCH(
     parentId?: unknown;
     needType?: unknown;
     costType?: unknown;
+    name?: unknown;
+    color?: unknown;
   };
 
   let applied = false;
+
+  if (typed.name !== undefined || typed.color !== undefined) {
+    const name = typeof typed.name === "string" ? typed.name.trim() : undefined;
+    if (typed.name !== undefined && (!name || name.length > 60)) {
+      return NextResponse.json({ error: "name must be 1-60 characters" }, { status: 400 });
+    }
+    if (typed.color !== undefined && (typeof typed.color !== "string" || !/^#[0-9a-f]{6}$/i.test(typed.color))) {
+      return NextResponse.json({ error: "color must be #rrggbb" }, { status: 400 });
+    }
+    const result = updateCategoryLook(workspaceId, categoryId, { name, color: typed.color as string | undefined });
+    if (result === "not-found") return NextResponse.json({ error: "not found" }, { status: 404 });
+    if (result === "duplicate") return NextResponse.json({ error: "duplicate" }, { status: 409 });
+    applied = true;
+  }
 
   if (typed.needType !== undefined || typed.costType !== undefined) {
     const needOk = typed.needType === undefined || ["need", "want", "saving"].includes(typed.needType as string);

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export function ScenarioCard() {
-  const locale = useLocale(); const t = useTranslations("scenario"); const he = locale === "he";
+  const locale = useLocale(); const t = useTranslations("scenario");
   const title = t("whatIf");
   const q = useQuery({ queryKey: ["balance-forecast"], queryFn: getBalanceForecast });
   const [expense, setExpense] = useState(""); const [saving, setSaving] = useState(""); const [date, setDate] = useState("");

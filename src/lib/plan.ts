@@ -101,8 +101,10 @@ export interface FinancialPlan {
   allocation: Record<AllocationClass, number>;
   /** Yearly tax checklist, keyed by item, value = year last done. */
   taxDone: Record<string, number>;
-  /** Hide advanced analysis and keep only the essentials. */
+  /** Minimal mode: fewer words and fewer panels across the app. Turned on from settings, never from Home. */
   simpleMode: boolean;
+  /** The compact Home ("raze"): the one-pager, switched by the toggle on Home itself. */
+  razeMode: boolean;
   /** Scrolling past a page's end opens the next page. Off by default: nothing should move by surprise. */
   wheelPaging: boolean;
   /** Legacy weekly check-in (feature removed): still parsed and kept so saved plans don't lose it; nothing reads it. */
@@ -181,6 +183,7 @@ export const DEFAULT_PLAN: FinancialPlan = {
   allocation: { equity: 70, bonds: 20, cash: 10 },
   taxDone: {},
   simpleMode: false,
+  razeMode: false,
   wheelPaging: false,
   checkin: { lastWeek: null, streak: 0 },
   events: [],
@@ -215,6 +218,8 @@ export function parsePlan(raw: unknown): FinancialPlan {
     allocation: Object.fromEntries(ALLOCATION_CLASSES.map((c) => [c, int(a[c], 0, 100, DEFAULT_PLAN.allocation[c])])) as Record<AllocationClass, number>,
     taxDone: Object.fromEntries(Object.entries(t).filter(([k, v]) => /^[a-z_]{1,30}$/.test(k) && Number.isInteger(v)).slice(0, 20)) as Record<string, number>,
     simpleMode: r.simpleMode === true,
+    // Plans saved before the split kept one flag for both modes; the old simple-mode home was the raze one.
+    razeMode: r.razeMode === true || (r.razeMode == null && r.simpleMode === true),
     wheelPaging: r.wheelPaging === true,
     checkin: {
       lastWeek: typeof c.lastWeek === "string" && /^\d{4}-W\d{2}$/.test(c.lastWeek) ? c.lastWeek : null,

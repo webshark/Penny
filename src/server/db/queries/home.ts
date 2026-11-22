@@ -1,7 +1,10 @@
 import "server-only";
+import { DRIFT_TOLERANCE } from "@/lib/balance-drift";
 
+import { ownerClause } from "@/server/lib/owner-scope";
 import { getDb } from "../index";
 import { toLocalISODate } from "../../lib/date-utils";
+import { cashBetween } from "../../finance/facts";
 import type {
   HomeBankHealthItem,
   HomeCashFlow,
@@ -10,6 +13,7 @@ import type {
   HomeHistoricalTrendPoint,
   HomeNeedsAttention,
   HomeRecentTransaction,
+  NeedType,
 } from "@/lib/types";
 import { BANK_PROVIDERS } from "@/lib/types";
 
@@ -18,28 +22,9 @@ export function getCashFlow(
   from: string,
   to: string
 ): HomeCashFlow {
-  const db = getDb();
-  const income = db
-    .prepare(
-      `SELECT COALESCE(SUM(charged_amount), 0) as total
-       FROM transactions
-       WHERE workspace_id = ? AND date >= ? AND date <= ?
-         AND status = 'completed' AND kind = 'income' AND is_excluded = 0`
-    )
-    .get(workspaceId, from, to) as { total: number };
-  const expenses = db
-    .prepare(
-      `SELECT COALESCE(SUM(-charged_amount), 0) as total
-       FROM transactions
-       WHERE workspace_id = ? AND date >= ? AND date <= ?
-         AND status = 'completed' AND kind = 'expense' AND is_excluded = 0`
-    )
-    .get(workspaceId, from, to) as { total: number };
-  return {
-    income: income.total,
-    expenses: expenses.total,
-    net: income.total - expenses.total,
-  };
+  // One definition for the whole app: refunds reduce spending, transfers are neutral.
+  const totals = cashBetween(workspaceId, from, to);
+  return { income: totals.income, expenses: totals.spend, net: totals.net };
 }
 
 export function getHistoricalTrend(
@@ -63,15 +48,15 @@ export function getHistoricalTrend(
     });
   }
 
+  const o = ownerClause("", { viaTransaction: true });
   const stmt = db.prepare(
-    `SELECT COALESCE(SUM(-charged_amount), 0) as total
-     FROM transactions
-     WHERE workspace_id = ? AND date >= ? AND date <= ?
-       AND status = 'completed' AND kind = 'expense' AND is_excluded = 0`
+    `SELECT COALESCE(SUM(spend), 0) as total
+     FROM v_spend_rows
+     WHERE workspace_id = ? AND date >= ? AND date <= ?${o.sql}`
   );
 
   return months.map((m) => {
-    const row = stmt.get(workspaceId, m.from, m.to) as { total: number };
+    const row = stmt.get(workspaceId, m.from, m.to, ...o.params) as { total: number };
     return {
       month: m.key,
       label: m.label,
@@ -85,19 +70,21 @@ export function getRecentTransactionsForHome(
   workspaceId: number,
   limit: number
 ): HomeRecentTransaction[] {
+  const o = ownerClause("t");
   const rows = getDb()
     .prepare(
       `SELECT t.id, t.date, t.description, t.charged_amount as chargedAmount,
               t.charged_currency as chargedCurrency, t.kind,
-              c.name as categoryName, c.color as categoryColor
+              c.name as categoryName, c.color as categoryColor,
+              CASE WHEN t.kind = 'expense' THEN c.need_type END as needType
        FROM transactions t
        LEFT JOIN categories c ON t.category_id = c.id
        WHERE t.workspace_id = ? AND t.status = 'completed' AND t.kind != 'transfer'
-         AND t.is_excluded = 0
+         AND t.is_excluded = 0${o.sql}
        ORDER BY t.date DESC, t.id DESC
        LIMIT ?`
     )
-    .all(workspaceId, limit) as Array<{
+    .all(workspaceId, ...o.params, limit) as Array<{
     id: number;
     date: string;
     description: string;
@@ -106,6 +93,7 @@ export function getRecentTransactionsForHome(
     kind: "expense" | "income" | "transfer";
     categoryName: string | null;
     categoryColor: string | null;
+    needType: NeedType | null;
   }>;
   return rows;
 }
@@ -123,8 +111,9 @@ export function getNeedsAttentionCounts(
     .get(workspaceId) as { count: number };
   const lowConfidence = db
     .prepare(
+      // The prompt asks for a 1-7 confidence and the UI shows "n/7", so anything at or below 4 is weak.
       `SELECT COUNT(*) as count FROM transactions
-       WHERE workspace_id = ? AND ai_confidence IS NOT NULL AND ai_confidence < 0.5
+       WHERE workspace_id = ? AND ai_confidence IS NOT NULL AND ai_confidence <= 4
          AND category_source = 'ai' AND status = 'completed' AND is_excluded = 0`
     )
     .get(workspaceId) as { count: number };
@@ -145,21 +134,27 @@ export function getBankHealth(workspaceId: number): HomeBankHealthItem[] {
   const db = getDb();
   const creds = db
     .prepare(
-      `SELECT provider FROM bank_credentials WHERE workspace_id = ? ORDER BY provider`
+      `SELECT id, provider, label FROM bank_credentials WHERE workspace_id = ? ORDER BY provider, id`
     )
-    .all(workspaceId) as { provider: string }[];
+    .all(workspaceId) as { id: number; provider: string; label: string }[];
+  const perProvider = new Map<string, number>();
+  for (const c of creds) perProvider.set(c.provider, (perProvider.get(c.provider) ?? 0) + 1);
 
   const latestRunStmt = db.prepare(
     `SELECT status, completed_at, error_message FROM sync_runs
-     WHERE workspace_id = ? AND provider = ?
-     ORDER BY started_at DESC LIMIT 1`
+     WHERE workspace_id = ? AND credential_id = ?
+     ORDER BY started_at DESC, id DESC LIMIT 1`
   );
 
+  const driftStmt = db.prepare(
+    `SELECT drift FROM account_balances WHERE workspace_id = ? AND provider = ? AND ABS(drift) >= ? ORDER BY ABS(drift) DESC LIMIT 1`
+  );
   const staleThresholdMs = 24 * 60 * 60 * 1000;
   const now = Date.now();
 
-  return creds.map(({ provider }) => {
-    const latest = latestRunStmt.get(workspaceId, provider) as
+  return creds.map(({ id, provider, label: ownLabel }) => {
+    const label = (perProvider.get(provider) ?? 0) > 1 ? ownLabel : null;
+    const latest = latestRunStmt.get(workspaceId, id) as
       | { status: string; completed_at: string | null; error_message: string | null }
       | undefined;
     const providerInfo = BANK_PROVIDERS.find((p) => p.id === provider);
@@ -167,7 +162,9 @@ export function getBankHealth(workspaceId: number): HomeBankHealthItem[] {
 
     if (!latest) {
       return {
+        id,
         provider,
+        label,
         providerName,
         lastSyncAt: null,
         status: "never",
@@ -177,7 +174,9 @@ export function getBankHealth(workspaceId: number): HomeBankHealthItem[] {
 
     if (latest.status === "failed") {
       return {
+        id,
         provider,
+        label,
         providerName,
         lastSyncAt: latest.completed_at,
         status: "error",
@@ -187,7 +186,9 @@ export function getBankHealth(workspaceId: number): HomeBankHealthItem[] {
 
     if (!latest.completed_at) {
       return {
+        id,
         provider,
+        label,
         providerName,
         lastSyncAt: null,
         status: "never",
@@ -198,11 +199,14 @@ export function getBankHealth(workspaceId: number): HomeBankHealthItem[] {
     const ageMs = now - new Date(latest.completed_at + "Z").getTime();
     const status: "ok" | "stale" = ageMs > staleThresholdMs ? "stale" : "ok";
     return {
+      id,
       provider,
+      label,
       providerName,
       lastSyncAt: latest.completed_at,
       status,
       errorMessage: null,
+      drift: (driftStmt.get(workspaceId, provider, DRIFT_TOLERANCE) as { drift: number } | undefined)?.drift ?? null,
     };
   });
 }
@@ -232,16 +236,16 @@ export function getCategorySnapshot(
     if (c.parentId != null) parentIds.add(c.parentId);
   }
 
+  const os = ownerClause("", { viaTransaction: true });
   const spendRows = db
     .prepare(
-      `SELECT category_id as categoryId, SUM(-charged_amount) as amount
-       FROM category_transactions
+      `SELECT category_id as categoryId, SUM(spend) as amount
+       FROM v_spend_rows
        WHERE workspace_id = ? AND date >= ? AND date <= ?
-         AND status = 'completed' AND kind = 'expense'
-         AND category_id IS NOT NULL AND is_excluded = 0
+         AND category_id IS NOT NULL${os.sql}
        GROUP BY category_id`
     )
-    .all(workspaceId, from, to) as Array<{ categoryId: number; amount: number }>;
+    .all(workspaceId, from, to, ...os.params) as Array<{ categoryId: number; amount: number }>;
 
   const budgetRows = db
     .prepare(
@@ -324,22 +328,23 @@ export function getCategoryScroll(
       .prepare("SELECT id, icon FROM categories WHERE workspace_id = ?")
       .all(workspaceId) as Array<{ id: number; icon: string | null }>).map((r) => [r.id, r.icon])
   );
-  const where = `t.workspace_id = ? AND t.date >= ? AND t.date <= ?
-         AND t.status = 'completed' AND t.kind = 'expense' AND t.is_excluded = 0`;
+  const ot = ownerClause("t", { viaTransaction: true });
+  const where = `t.workspace_id = ? AND t.date >= ? AND t.date <= ?${ot.sql}`;
   const trendRows = db
     .prepare(
-      `SELECT COALESCE(c.parent_id, c.id) as key, substr(t.date, 1, 7) as month, SUM(-t.charged_amount) as amount
-       FROM category_transactions t JOIN categories c ON c.id = t.category_id
+      `SELECT COALESCE(c.parent_id, c.id) as key, substr(t.date, 1, 7) as month, SUM(t.spend) as amount
+       FROM v_spend_rows t JOIN categories c ON c.id = t.category_id
        WHERE ${where} GROUP BY key, month`
     )
-    .all(workspaceId, trendFrom, to) as Array<{ key: number; month: string; amount: number }>;
+    .all(workspaceId, trendFrom, to, ...ot.params) as Array<{ key: number; month: string; amount: number }>;
   const merchantRows = db
     .prepare(
-      `SELECT COALESCE(c.parent_id, c.id) as key, t.description as merchant, SUM(-t.charged_amount) as amount
-       FROM category_transactions t JOIN categories c ON c.id = t.category_id
+      `SELECT /* merchant name comes from the transaction, the spend view has none */ COALESCE(c.parent_id, c.id) as key, source.description as merchant, SUM(t.spend) as amount
+       FROM v_spend_rows t JOIN categories c ON c.id = t.category_id
+       JOIN transactions source ON source.id = t.transaction_id AND source.workspace_id = t.workspace_id
        WHERE ${where} GROUP BY key, merchant ORDER BY amount DESC`
     )
-    .all(workspaceId, from, to) as Array<{ key: number; merchant: string; amount: number }>;
+    .all(workspaceId, from, to, ...ot.params) as Array<{ key: number; merchant: string; amount: number }>;
 
   return snapshot.map((c) => {
     const byMonth = new Map(trendRows.filter((r) => r.key === c.categoryId).map((r) => [r.month, r.amount]));

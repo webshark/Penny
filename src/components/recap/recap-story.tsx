@@ -9,7 +9,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { getRecap } from "@/lib/api";
-import { lastCompleteMonth, shiftMonth, type MonthRecap, type YearRecap } from "@/lib/recap";
+import type { MonthRecap, YearRecap } from "@/lib/recap";
+import { budgetMonthByKey, budgetMonthRange, shiftBudgetMonthKey } from "@/lib/finance-period";
+import { usePlan } from "@/hooks/use-plan";
 import { shekels } from "@/lib/money";
 import { translateCategoryName } from "@/lib/i18n-data";
 import { Button } from "@/components/ui/button";
@@ -33,12 +35,26 @@ export function RecapStory() {
   const yearParam = params.get("year");
   const year = yearParam && /^\d{4}$/.test(yearParam) ? Number(yearParam) : undefined;
   const today = todayIso();
-  const month = params.get("month") ?? lastCompleteMonth(today);
-  const query = useQuery({ queryKey: ["recap", year ?? month], queryFn: () => getRecap(year ? { year } : { month }) });
+  // Month keys and their dates are the household's periods, so the picker offers the same range
+  // the recap and budgets use, and defaults to the last complete period.
+  const { plan, loaded: planLoaded, failed: planFailed } = usePlan();
+  const startDay = plan.monthStartDay;
+  const currentKey = budgetMonthRange(startDay, today).key;
+  const month = params.get("month") ?? shiftBudgetMonthKey(currentKey, -1);
+  const periods = Array.from({ length: 13 }, (_, i) => budgetMonthByKey(startDay, shiftBudgetMonthKey(currentKey, -i)));
+  const query = useQuery({
+    queryKey: ["recap", year ?? month],
+    queryFn: () => getRecap(year ? { year } : { month }),
+    // Wait for the plan in month mode, so the default month is the household's, not the calendar one.
+    enabled: !!year || planLoaded || planFailed,
+  });
   const [index, setIndex] = useState(0);
   const money = (n: number) => shekels(n, locale);
   const cat = (name: string) => translateCategoryName(name, tCat);
   const monthName = (m: string) => new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${m}-15T12:00:00Z`));
+  const dayMonth = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" });
+  const range = (from: string, to: string) => `${dayMonth.format(new Date(`${from}T12:00:00Z`))} – ${dayMonth.format(new Date(`${to}T12:00:00Z`))}`;
+  const periodLabel = (from: string, to: string, key: string) => startDay === 1 ? monthName(key) : `${monthName(key)} (${range(from, to)})`;
 
   const data = query.data;
   const cards: StoryCard[] = !data ? [] : data.mode === "year" ? yearCards(data.recap) : monthCards(data.recap);
@@ -109,8 +125,9 @@ export function RecapStory() {
   }, [total]);
 
   const setUrl = (q: string) => { setIndex(0); router.replace(`/recap${q}`, { scroll: false }); };
-  const months = Array.from({ length: 13 }, (_, i) => shiftMonth(today.slice(0, 7), -i));
   const viewYear = year ?? Number(month.slice(0, 4));
+  const activePeriod = periods.find((p) => p.key === month);
+  const monthLabel = activePeriod ? periodLabel(activePeriod.from, activePeriod.to, activePeriod.key) : monthName(month);
   const card = cards[at];
 
   return (
@@ -119,10 +136,11 @@ export function RecapStory() {
         {year ? (
           <Link href="/recap" className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">{t("monthLink")}</Link>
         ) : (
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <label className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
             {t("monthLabel")}
-            <select value={month} onChange={(e) => setUrl(`?month=${e.target.value}`)} className="min-h-11 rounded-xl border border-border bg-card px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring">
-              {months.map((m) => <option key={m} value={m}>{monthName(m)}</option>)}
+            {/* The options are long; the select shrinks to the row instead of widening the page. */}
+            <select value={month} onChange={(e) => setUrl(`?month=${e.target.value}`)} className="min-h-11 max-w-full min-w-0 rounded-xl border border-border bg-card px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+              {periods.map((p) => <option key={p.key} value={p.key}>{periodLabel(p.from, p.to, p.key)}</option>)}
             </select>
           </label>
         )}
@@ -132,7 +150,7 @@ export function RecapStory() {
       {query.isPending ? <Skeleton className="h-80 w-full rounded-3xl" />
         : query.isError ? <p role="alert" className="rounded-3xl border border-border p-8 text-center text-muted-foreground">{t("loadFailed")}</p>
         : !card ? null : (
-        <section aria-roledescription={t("carousel")} aria-label={year ? t("yearTitle", { year }) : monthName(month)}>
+        <section aria-roledescription={t("carousel")} aria-label={year ? t("yearTitle", { year }) : monthLabel}>
           <div
             key={`${year ?? month}-${at}`}
             role="group"

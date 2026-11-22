@@ -6,6 +6,8 @@ export async function register() {
   initLegacyExportSchedule();
   const { initFolderImportSchedule } = await import("@/server/lib/folder-import");
   initFolderImportSchedule();
+  const { initAutoBackupSchedule } = await import("@/server/lib/auto-backup");
+  initAutoBackupSchedule();
   const { startBot } = await import("@/server/bot");
   startBot();
 }

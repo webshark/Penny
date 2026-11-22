@@ -18,6 +18,8 @@ export interface Profile {
   avatarColor: string | null;
   /** The profile's own Pip; null = not picked yet (the legacy art avatar shows). */
   avatarPet: import("./profile-avatar").ProfilePip | null;
+  /** An uploaded picture (small JPEG data URL); null = the initial on avatarColor. */
+  avatarPhoto: string | null;
   createdAt: string;
 }
 
@@ -45,6 +47,8 @@ export interface Transaction {
   accountLabel: string | null;
   syncRunId: number;
   kind: "expense" | "income" | "transfer";
+  /** How much of this row belongs to a business, 0–100. The rest is the household's own spending. */
+  businessSharePct: number;
   needsReview: boolean;
   createdAt: string;
   updatedAt: string;
@@ -78,7 +82,7 @@ export interface Category {
 export type NeedType = "need" | "want" | "saving";
 export type CostType = "fixed" | "variable" | "unplanned";
 
-export type CategoryViewMode = "collapsed" | "expanded";
+export type CategoryViewMode = "collapsed" | "expanded" | "table";
 
 export type BudgetSource = "own" | "rollup" | "leaf";
 
@@ -152,8 +156,12 @@ export interface DashboardSummary {
   topMerchants: MerchantSummary[];
   categoryBreakdown: CategoryBreakdown[];
   categoriesWithData: CategoryWithData[];
+  /** Expenses in the range that still have no category. */
+  uncategorized: { spent: number; count: number };
   totalBudget: number;
   budgetedSpent: number;
+  /** Income in the period, for envelope budgeting. */
+  income?: number;
   overallPercentSpent: number;
   timeElapsedPercent: number;
   daysUntilPayday: number;
@@ -230,6 +238,8 @@ export interface HomeRecentTransaction {
   kind: "expense" | "income" | "transfer";
   categoryName: string | null;
   categoryColor: string | null;
+  /** For expenses: need, want or saving, from the category. */
+  needType?: NeedType | null;
 }
 
 export interface HomeTopMerchant {
@@ -245,11 +255,17 @@ export interface HomeNeedsAttention {
 }
 
 export interface HomeBankHealthItem {
+  /** The connection (bank credential) id: a household can connect the same bank twice. */
+  id: number;
   provider: string;
+  /** The connection's own name, set only when the same bank is connected more than once. */
+  label: string | null;
   providerName: string;
   lastSyncAt: string | null;
   status: "ok" | "stale" | "error" | "never";
   errorMessage: string | null;
+  /** The largest gap between the synced balance change and the transactions, when it's over the tolerance. */
+  drift?: number | null;
 }
 
 export interface HomeSectionError {
@@ -343,7 +359,8 @@ export type BankProvider =
   | "massad"
   | "beyahadBishvilha"
   | "behatsdaa"
-  | "oneZero";
+  | "oneZero"
+  | "openBanking";
 
 export interface CredentialField {
   key: string;
@@ -409,6 +426,38 @@ export const RECOMMENDED_OLLAMA_MODELS: OllamaModelInfo[] = [
 ];
 
 export const BANK_PROVIDERS: BankProviderInfo[] = [
+  {
+    // Not a bank of its own: any NextGenPSD2 / Bank of Israel XS2A endpoint.
+    id: "openBanking",
+    name: "Open Banking",
+    kind: "bank",
+    color: "#0B5FFF",
+    blurb: "Read accounts through the open banking API",
+    domain: "boi.org.il",
+    credentialFields: [
+      {
+        key: "baseUrl",
+        label: "Open banking API base URL",
+        type: "text",
+        placeholder: "https://xs2a.example.co.il",
+        hint: "The XS2A endpoint of your bank or aggregator, without /v1.",
+      },
+      {
+        key: "token",
+        label: "Access token",
+        type: "password",
+        placeholder: "Bearer token from the consent",
+        hint: "The token issued after you approved the account information consent.",
+      },
+      {
+        key: "consentId",
+        label: "Consent ID (optional)",
+        type: "text",
+        hint: "Sent as Consent-ID on every request when the endpoint expects it.",
+      },
+    ],
+    enabled: true,
+  },
   {
     id: "isracard",
     name: "Isracard",
@@ -829,6 +878,8 @@ export interface AssetInput {
   quantity: number | null;
   manualValue: number | null;
   costBasis: number | null;
+  /** ILS per unit of `currency` when bought, for a foreign holding; splits its gain into price and exchange rate. */
+  costFx?: number | null;
   liquid: boolean;
   note: string | null;
   /** Management fees, % a year (pension, study and provident funds). */
@@ -848,12 +899,18 @@ export interface Asset extends AssetInput {
   isLiability: boolean;
   /** "bank" = a synced account balance, updated automatically and not editable. */
   source?: "bank";
+  /** For synced balances: the bank or card company id, so the name can be shown in the user's language. */
+  provider?: string;
+  /** For synced balances: the account number, to list its transactions. */
+  accountNumber?: string;
   updatedAt?: string;
   /** Current value in its own currency and in ILS (null if no price or FX rate). */
   value: number | null;
   valueIls: number | null;
   /** Unrealised gain in ILS, when a cost basis is set. */
   gainIls: number | null;
+  /** The part of `gainIls` that came from the exchange rate (needs `costFx`). */
+  fxGainIls?: number | null;
   quote: Quote | null;
   fund?: FundComparison | null;
 }
@@ -918,16 +975,85 @@ export interface Goal {
 
 export const POLICY_KINDS = ["health", "shaban", "life", "mortgage_life", "disability", "long_term_care", "home", "car", "travel", "other"] as const;
 
+export const INSURANCE_DOC_KINDS = ["policy", "appendix", "renewal", "claim", "other"] as const;
+
 export interface InsurancePolicy {
   id: number;
   name: string;
   kind: (typeof POLICY_KINDS)[number];
   provider: string | null;
+  /** The monthly cost. A yearly premium is stored as premium / 12. */
   monthlyPremium: number;
   /** YYYY-MM the policy renews, if known. */
   renewalMonth?: string | null;
   /** Who the policy covers, free text (a name); empty means the whole household. */
   insured?: string | null;
+  policyNumber?: string | null;
+  /** Account number the premium is charged to; empty matches any account. */
+  paymentAccount?: string | null;
+  /** Text that identifies this policy on the statement, e.g. "הפניקס". */
+  matchPattern?: string | null;
+  /** YYYY-MM-DD. */
+  startDate?: string | null;
+  /** YYYY-MM-DD; drives the renewal reminder when set. */
+  endDate?: string | null;
+  /** Sum insured. */
+  coverage?: number | null;
+  deductible?: number | null;
+  agentName?: string | null;
+  agentPhone?: string | null;
+  notes?: string | null;
+  archived?: boolean;
+}
+
+export interface InsuranceDocument {
+  id: number;
+  policyId: number;
+  fileName: string;
+  originalName: string;
+  mime: string;
+  size: number;
+  kind: (typeof INSURANCE_DOC_KINDS)[number];
+  uploadedAt: string;
+}
+
+export interface InsurancePayments {
+  /** Gross premium charges in the last 12 months. */
+  last12: number;
+  count: number;
+  lastDate: string | null;
+  lastAmount: number | null;
+}
+
+export interface InsurancePolicyView extends InsurancePolicy {
+  archived: boolean;
+  documents: InsuranceDocument[];
+  payments: InsurancePayments;
+  renewalSoon: boolean;
+}
+
+/** Insurance-looking charges that no policy explains yet. */
+export interface InsuranceUnlinkedCharge {
+  description: string;
+  account: string;
+  count: number;
+  total: number;
+  lastDate: string;
+  lastAmount: number;
+}
+
+export interface InsurancePayload {
+  policies: InsurancePolicyView[];
+  unlinked: InsuranceUnlinkedCharge[];
+  totals: {
+    count: number;
+    monthly: number;
+    paidLast12: number;
+    renewalsSoon: number;
+    documents: number;
+  };
+  /** Account numbers that appear in transactions, for the paying-account picker. */
+  accounts: string[];
 }
 
 export interface PlanPayload {

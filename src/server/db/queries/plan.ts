@@ -53,7 +53,7 @@ export function listGoals(workspaceId: number): Goal[] {
 /** Spending between two dates in the Travel category and its subcategories (refunds reduce it). */
 export function tripActual(workspaceId: number, start: string, end: string): number {
   const row = getDb().prepare(
-    `SELECT COALESCE(-SUM(t.charged_amount), 0) AS total FROM transactions t JOIN categories c ON c.id = t.category_id
+    `SELECT COALESCE(-SUM(t.personal_amount), 0) AS total FROM transactions t JOIN categories c ON c.id = t.category_id
      WHERE t.workspace_id = ? AND t.is_excluded = 0 AND t.kind = 'expense' AND substr(t.date, 1, 10) BETWEEN ? AND ?
        AND (c.name = 'Travel' OR c.parent_id IN (SELECT id FROM categories WHERE workspace_id = ? AND name = 'Travel'))`
   ).get(workspaceId, start, end, workspaceId) as { total: number };

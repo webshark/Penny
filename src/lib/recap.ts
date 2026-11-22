@@ -1,7 +1,11 @@
-/** Monthly and yearly recap: pure, rule-based summaries of spending. Calendar months. */
+/**
+ * Monthly and yearly recap: pure, rule-based summaries of spending. A month key is the household
+ * month (the range in `periods`), or the calendar month when no ranges are given.
+ */
 
 export interface RecapExpense { date: string; amount: number; categoryId: number | null; description: string }
 export interface RecapCategory { id: number; name: string; needType: string | null }
+export interface RecapRange { from: string; to: string }
 export interface RecapInput {
   expenses: RecapExpense[];
   /** Income per YYYY-MM. */
@@ -11,6 +15,8 @@ export interface RecapInput {
   budgetTotal: number;
   /** YYYY-MM-DD; days after it are not counted yet. */
   today: string;
+  /** YYYY-MM key -> the household month's dates; absent means the calendar month. */
+  periods?: Record<string, RecapRange>;
 }
 
 export interface MonthRecap {
@@ -73,25 +79,31 @@ function noSpend(expenses: RecapExpense[], from: string, to: string) {
   return { count, longest, counted: list.length };
 }
 
-const inMonth = (expenses: RecapExpense[], month: string) => expenses.filter((e) => e.date.startsWith(month));
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** The dates behind a month key: the household month when given, else the calendar month. */
+function recapRange(input: RecapInput, key: string): RecapRange {
+  return input.periods?.[key] ?? { from: `${key}-01`, to: `${key}-${pad(daysIn(key))}` };
+}
+
+const inPeriod = (expenses: RecapExpense[], input: RecapInput, key: string) => {
+  const range = recapRange(input, key);
+  return expenses.filter((e) => e.date >= range.from && e.date <= range.to);
+};
 const sum = (expenses: RecapExpense[]) => expenses.reduce((s, e) => s + e.amount, 0);
 function byCategory(expenses: RecapExpense[]) {
   const map = new Map<number, number>();
   for (const e of expenses) if (e.categoryId != null) map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + e.amount);
   return map;
 }
-const lastDay = (month: string, today: string) => {
-  const end = `${month}-${String(daysIn(month)).padStart(2, "0")}`;
-  return end < today ? end : today;
-};
-
 export function monthRecap(month: string, input: RecapInput): MonthRecap {
   const { expenses, categories, budgetTotal, today } = input;
   const cat = new Map(categories.map((c) => [c.id, c]));
   const name = (id: number) => cat.get(id)?.name ?? "";
-  const cur = inMonth(expenses, month);
+  const range = recapRange(input, month);
+  const cur = inPeriod(expenses, input, month);
   const prevMonth = shiftMonth(month, -1);
-  const prev = inMonth(expenses, prevMonth);
+  const prev = inPeriod(expenses, input, prevMonth);
   const spent = sum(cur);
   const income = input.income[month] ?? 0;
   const curBy = byCategory(cur);
@@ -112,13 +124,13 @@ export function monthRecap(month: string, input: RecapInput): MonthRecap {
     underBudgetMonths = 0;
     // Look back at most two years; a month with no spending at all means no data, so the run stops.
     for (let m = month, i = 0; i < 24; m = shiftMonth(m, -1), i++) {
-      const s = sum(inMonth(expenses, m));
+      const s = sum(inPeriod(expenses, input, m));
       if (s === 0 || s > budgetTotal) break;
       underBudgetMonths++;
     }
   }
 
-  const ns = noSpend(cur, `${month}-01`, lastDay(month, today));
+  const ns = noSpend(cur, range.from, range.to < today ? range.to : today);
   return {
     month,
     spent,
@@ -138,22 +150,25 @@ export function monthRecap(month: string, input: RecapInput): MonthRecap {
 
 export function yearRecap(year: number, input: RecapInput): YearRecap {
   const { categories, today } = input;
-  const expenses = input.expenses.filter((e) => e.date.startsWith(`${year}-`));
+  // A household year is the twelve months keyed by this calendar year, not Jan 1 to Dec 31.
+  const keys = Array.from({ length: 12 }, (_, i) => `${year}-${pad(i + 1)}`);
+  const first = recapRange(input, keys[0]);
+  const last = recapRange(input, keys[11]);
+  const expenses = input.expenses.filter((e) => e.date >= first.from && e.date <= last.to);
   const cat = new Map(categories.map((c) => [c.id, c.name]));
   const spent = sum(expenses);
-  const income = Object.entries(input.income).filter(([m]) => m.startsWith(`${year}-`)).reduce((s, [, v]) => s + v, 0);
+  const income = keys.reduce((s, key) => s + (input.income[key] ?? 0), 0);
   const kept = income - spent;
   let bestMonth: YearRecap["bestMonth"] = null;
-  for (let i = 1; i <= 12; i++) {
-    const m = `${year}-${String(i).padStart(2, "0")}`;
-    if (`${m}-01` > today) break;
-    const s = sum(inMonth(expenses, m));
-    const inc = input.income[m] ?? 0;
+  for (const key of keys) {
+    if (recapRange(input, key).from > today) break;
+    const s = sum(inPeriod(expenses, input, key));
+    const inc = input.income[key] ?? 0;
     if (s === 0 && inc === 0) continue;
-    if (!bestMonth || inc - s > bestMonth.kept) bestMonth = { month: m, kept: inc - s };
+    if (!bestMonth || inc - s > bestMonth.kept) bestMonth = { month: key, kept: inc - s };
   }
-  const end = `${year}-12-31` < today ? `${year}-12-31` : today;
-  const ns = end >= `${year}-01-01` ? noSpend(expenses, `${year}-01-01`, end) : { count: 0, counted: 0 };
+  const end = last.to < today ? last.to : today;
+  const ns = end >= first.from ? noSpend(expenses, first.from, end) : { count: 0, counted: 0 };
   return {
     year,
     spent,

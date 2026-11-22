@@ -45,3 +45,8 @@ describe("budget studio figures", () => {
     expect(distributionCategories(rows).map((c) => c.categoryId)).toEqual([1, 4, 5]);
   });
 });
+
+it("opens the retired see-through look as light, and ignores accent and custom colour", () => {
+  const p = parseStudioPreferences(JSON.stringify({ theme: "glass", accent: "rose", customColor: "#ff0000" }));
+  expect(p).toMatchObject({ theme: "pearl", accent: "violet", customColor: null });
+});

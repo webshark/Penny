@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { studyFundLiquidFrom } from "@/lib/study-fund";
 import { toast } from "sonner";
 import { createAssets, searchFunds, updateAsset } from "@/lib/api";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,6 +49,7 @@ export function AssetDialog({
     quantity: initial?.quantity?.toString() ?? "",
     manualValue: initial?.manualValue?.toString() ?? "",
     costBasis: initial?.costBasis?.toString() ?? "",
+    costFx: initial?.costFx?.toString() ?? "",
     liquid: initial?.liquid ?? true,
     feeDeposit: initial?.feeDeposit?.toString() ?? "",
     feeBalance: initial?.feeBalance?.toString() ?? "",
@@ -70,6 +72,10 @@ export function AssetDialog({
   const isLiability = (LIABILITY_TYPES as readonly string[]).includes(form.type);
   const hasFees = SAVINGS_TYPES.includes(form.type);
   const isHome = form.type === "real_estate";
+  const isStudyFund = form.type === "study_fund";
+  const locale = useLocale();
+  const monthLabel = (m: string) => new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(`${m}-15T12:00:00`));
+  const liquidFrom = isStudyFund && form.purchaseMonth ? studyFundLiquidFrom(form.purchaseMonth) : null;
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -81,6 +87,7 @@ export function AssetDialog({
         quantity: priced ? Number(form.quantity) : null,
         manualValue: priced ? null : Number(form.manualValue),
         costBasis: form.costBasis ? Number(form.costBasis) : null,
+        costFx: form.currency !== "ILS" ? opt(form.costFx) : null,
         liquid: form.liquid,
         note: initial?.note ?? null,
         feeDeposit: hasFees ? opt(form.feeDeposit) : null,
@@ -98,6 +105,7 @@ export function AssetDialog({
           purchasePrice: opt(form.purchasePrice),
           purchaseMonth: form.purchaseMonth || null,
         }),
+        ...(isStudyFund && { purchaseMonth: form.purchaseMonth || null }),
       };
       return asset !== "new" ? updateAsset(asset.id, input).then(() => undefined) : createAssets([input]).then(() => undefined);
     },
@@ -139,7 +147,7 @@ export function AssetDialog({
                   setForm((f) => ({ ...f, type, liquid: !ILLIQUID_DEFAULT.includes(type) }));
                 }}
               >
-                <SelectTrigger className="w-full"><SelectValue>{(v: string) => t(`type_${v}`)}</SelectValue></SelectTrigger>
+                <SelectTrigger aria-label={t("fieldType")} className="w-full"><SelectValue>{(v: string) => t(`type_${v}`)}</SelectValue></SelectTrigger>
                 <SelectContent>
                   {[...ASSET_TYPES, ...LIABILITY_TYPES].map((v) => (
                     <SelectItem key={v} value={v}>{t(`type_${v}`)}</SelectItem>
@@ -150,7 +158,7 @@ export function AssetDialog({
             <div className="space-y-1.5">
               <Label>{t("fieldCurrency")}</Label>
               <Select value={form.currency} onValueChange={(v) => v && set("currency", v)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("fieldCurrency")} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
@@ -211,6 +219,16 @@ export function AssetDialog({
             </div>
           )}
 
+          {isStudyFund && (
+            <div className="space-y-1.5">
+              <Label htmlFor="fund-opened">{t("fieldOpened")}</Label>
+              <Input id="fund-opened" type="month" dir="ltr" value={form.purchaseMonth} onChange={(e) => set("purchaseMonth", e.target.value)} aria-describedby="fund-opened-hint" />
+              <p id="fund-opened-hint" className="text-caption text-pretty text-muted-foreground">
+                {liquidFrom ? t("fieldOpenedLiquid", { date: monthLabel(liquidFrom) }) : t("fieldOpenedHint")}
+              </p>
+            </div>
+          )}
+
           {isHome && (
             <fieldset className="space-y-3 rounded-xl border border-border p-3">
               <legend className="px-1 text-footnote font-medium">{tp("detailsTitle")}</legend>
@@ -236,9 +254,10 @@ export function AssetDialog({
           )}
 
           {isLiability && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <NumField id="asset-rate" label={t("fieldInterestRate")} value={form.interestRate} onChange={(v) => set("interestRate", v)} />
               <NumField id="asset-payment" label={t("fieldMonthlyPayment")} value={form.monthlyPayment} onChange={(v) => set("monthlyPayment", v)} />
+              <NumField id="asset-original" label={t("fieldOriginal")} value={form.costBasis} onChange={(v) => set("costBasis", v)} />
             </div>
           )}
 
@@ -249,19 +268,26 @@ export function AssetDialog({
                 <Input id="asset-cost" type="number" inputMode="decimal" min="0" step="any" dir="ltr" value={form.costBasis} onChange={(e) => set("costBasis", e.target.value)} />
                 <p className="text-caption text-muted-foreground">{t("fieldCostHint")}</p>
               </div>
-              <label className="flex items-center justify-between gap-3 text-footnote">
+              {form.currency !== "ILS" && form.costBasis && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="asset-cost-fx">{t("fieldCostFx", { currency: form.currency })}</Label>
+                  <Input id="asset-cost-fx" type="number" inputMode="decimal" min="0" step="any" dir="ltr" value={form.costFx} onChange={(e) => set("costFx", e.target.value)} aria-describedby="asset-cost-fx-hint" />
+                  <p id="asset-cost-fx-hint" className="text-caption text-pretty text-muted-foreground">{t("fieldCostFxHint")}</p>
+                </div>
+              )}
+              {!liquidFrom && <label className="flex items-center justify-between gap-3 text-footnote">
                 <span>
                   <span className="block font-medium">{t("fieldLiquid")}</span>
                   <span className="text-muted-foreground">{t("fieldLiquidHint")}</span>
                 </span>
                 <Switch checked={form.liquid} onCheckedChange={(v) => set("liquid", v)} />
-              </label>
+              </label>}
             </>
           )}
         </form>
         <DialogFooter>
-          <IconButton label={tc("cancel")} variant="outline" onClick={onClose}><X className="size-4" aria-hidden /></IconButton>
-          <IconButton label={mutation.isPending ? t("saving") : t("save")} variant="default" type="submit" form="asset-form" disabled={mutation.isPending}>
+          <IconButton showLabel label={tc("cancel")} variant="outline" onClick={onClose}><X className="size-4" aria-hidden /></IconButton>
+          <IconButton showLabel label={mutation.isPending ? t("saving") : t("save")} variant="default" type="submit" form="asset-form" disabled={mutation.isPending}>
             <Check className="size-4" aria-hidden />
           </IconButton>
         </DialogFooter>

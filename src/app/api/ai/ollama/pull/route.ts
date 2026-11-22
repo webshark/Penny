@@ -3,12 +3,16 @@ import {
   pullOllamaModel,
 } from "@/server/ai/ollama-manager";
 import { getGlobalSetting } from "@/server/db/queries/settings";
+import { demoBlockedResponse } from "@/server/demo/guard";
 
 function sseEvent(event: string, data: Record<string, unknown>): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 export async function POST(request: Request) {
+  const blocked = demoBlockedResponse();
+  if (blocked) return blocked;
+
   const body = (await request.json().catch(() => ({}))) as {
     model?: string;
     url?: string;

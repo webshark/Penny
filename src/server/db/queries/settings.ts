@@ -124,7 +124,11 @@ export function updateAppSettings(
   const db = getDb();
   const update = db.transaction(() => {
     if (settings.monthsToSync !== undefined) {
-      setWorkspaceSetting(workspaceId, "months_to_sync", String(settings.monthsToSync));
+      const months = settings.monthsToSync;
+      if (!Number.isInteger(months) || months < 1 || months > 36) {
+        throw new Error("monthsToSync must be 1-36 months");
+      }
+      setWorkspaceSetting(workspaceId, "months_to_sync", String(months));
     }
     if (settings.aiProvider !== undefined) {
       setGlobalSetting("ai_provider", settings.aiProvider);
@@ -145,12 +149,19 @@ export function updateAppSettings(
       );
     }
     if (settings.paydayDay !== undefined) {
+      if (typeof settings.paydayDay !== "number" || !Number.isFinite(settings.paydayDay)) {
+        throw new Error("paydayDay must be a number 1-28");
+      }
       const clamped = Math.max(1, Math.min(28, Math.round(settings.paydayDay)));
       setWorkspaceSetting(workspaceId, "payday_day", String(clamped));
     }
     if (settings.monthlyTarget !== undefined) {
       const t = settings.monthlyTarget;
-      if (t == null || !Number.isFinite(t) || t <= 0) {
+      // A wrong type is a bad request; only null/0 mean "clear the target".
+      if (t != null && (typeof t !== "number" || !Number.isFinite(t))) {
+        throw new Error("monthlyTarget must be a positive number or null");
+      }
+      if (t == null || t <= 0) {
         getDb()
           .prepare(
             "DELETE FROM workspace_settings WHERE workspace_id = ? AND key = ?"

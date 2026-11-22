@@ -20,6 +20,14 @@ describe("forecastBill", () => {
     expect(out[0].parts).toEqual({ posted: 0, recurring: 50, installments: 100, discretionary: 1000 });
     for (const f of out) expect(f.total).toBe(f.parts.posted + f.parts.recurring + f.parts.installments + f.parts.discretionary);
   });
+  it("bills a subscription where its own charges land, not where its charge date falls", () => {
+    // Charged on the 5th, billed on the 10th of the next month (35 days later); today Dec 7, the Dec 5 charge is posted to Jan 10.
+    const out = forecastBill({
+      billingDay: 10, today: "2026-12-07", series: [sub({ lastDate: "2026-12-05", billingLagDays: 36 })], installments: [],
+      avgDiscretionary: 0, posted: { "2027-01-10": 50 },
+    });
+    expect(out.map((f) => [f.date, f.total])).toEqual([["2026-12-10", 0], ["2027-01-10", 50], ["2027-02-10", 50]]);
+  });
   it("starts at the next month once the billing day has passed", () => {
     const out = forecastBill({ billingDay: 10, today: "2026-11-15", series: [], installments: [], avgDiscretionary: 0 });
     expect(out[0].date).toBe("2026-12-10");

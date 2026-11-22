@@ -6,6 +6,8 @@ import {
 } from "@/server/db/queries/workspaces";
 import { parseAvatar } from "@/lib/profile-avatar";
 
+import { errorResponse } from "@/server/lib/api-error";
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -48,10 +50,7 @@ export async function PATCH(
     const ws = updateWorkspace(numericId, name, avatar);
     return NextResponse.json(ws);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to update workspace" },
-      { status: 400 }
-    );
+    return errorResponse("workspaces", err);
   }
 }
 
@@ -73,9 +72,6 @@ export async function DELETE(
     deleteWorkspace(numericId);
     return NextResponse.json({ success: true });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to delete workspace" },
-      { status: 409 }
-    );
+    return errorResponse("workspaces", err);
   }
 }

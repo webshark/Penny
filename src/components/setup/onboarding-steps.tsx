@@ -8,12 +8,12 @@ import { FileUp, Landmark, Lock, PiggyBank, Sparkles, Wallet } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Back, Forward } from "@/components/ui/dir-chevron";
 import { Input } from "@/components/ui/input";
-import { PetFace, PipPicker } from "@/components/home/pet-card";
+import { AvatarEditor, type AvatarDraft } from "@/components/profiles/avatar-editor";
+import { PetFace } from "@/components/home/pet-card";
 import { useProfiles } from "@/components/layout/workspace-switcher";
 import { NAV } from "@/components/layout/app-sidebar";
 import { StatementImportCard } from "@/components/settings/statement-import-card";
 import { saveProfile } from "@/lib/api";
-import { defaultPip, type ProfilePip } from "@/lib/profile-avatar";
 import { BankStep } from "./bank-step";
 
 const eyebrow = "text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground";
@@ -64,18 +64,17 @@ export function IntroStep({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-/** Your profile: a name and your own Pip (look, colour, optional nickname). */
+/** Your profile: a name and your picture (a photo, or your initial on a colour). */
 export function ProfileStep({ onComplete, onBack }: { onComplete: () => void; onBack: () => void }) {
   const t = useTranslations("onboarding");
   const tp = useTranslations("profiles");
-  const tPet = useTranslations("pet");
   const qc = useQueryClient();
   const { active, isPending } = useProfiles();
-  const [draft, setDraft] = useState<{ name: string; pip: ProfilePip } | null>(null);
+  const [draft, setDraft] = useState<{ name: string; avatar: AvatarDraft } | null>(null);
   // Start from the stored profile once it loads; the seeded "Default" starts with an empty name.
-  if (!draft && !isPending) setDraft({ name: active && active.name !== "Default" ? active.name : "", pip: active?.avatarPet ?? defaultPip(active?.id ?? 1) });
+  if (!draft && !isPending) setDraft({ name: active && active.name !== "Default" ? active.name : "", avatar: { color: active?.avatarColor ?? null, photo: active?.avatarPhoto ?? null } });
   const save = useMutation({
-    mutationFn: (d: { name: string; pip: ProfilePip }) => saveProfile(active?.id ?? null, d.name.trim(), { avatarPet: d.pip }),
+    mutationFn: (d: { name: string; avatar: AvatarDraft }) => saveProfile(active?.id ?? null, d.name.trim(), { avatarColor: d.avatar.color, avatarPhoto: d.avatar.photo }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["profiles"] });
       qc.invalidateQueries({ queryKey: ["settings"] });
@@ -97,17 +96,10 @@ export function ProfileStep({ onComplete, onBack }: { onComplete: () => void; on
         <h1 className={title}>{t("profileTitle")}</h1>
         <p className="text-sm text-muted-foreground">{t("profileBody")}</p>
       </header>
-      <div className="grid place-items-center">
-        <PetFace mood="happy" pet={draft.pip} px={130} />
-      </div>
+      <AvatarEditor id={active?.id ?? 1} name={draft.name} value={draft.avatar} onChange={(avatar) => setDraft({ ...draft, avatar })} />
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         {t("profileName")}
         <Input autoFocus required maxLength={60} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="h-11" />
-      </label>
-      <PipPicker value={draft.pip} onChange={(v) => setDraft({ ...draft, pip: { ...draft.pip, ...v } })} />
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        {tp("pipName")}
-        <Input maxLength={24} value={draft.pip.name} placeholder={tPet("defaultName")} onChange={(e) => setDraft({ ...draft, pip: { ...draft.pip, name: e.target.value } })} className="h-11" />
       </label>
       <StepFooter onBack={onBack}>
         <Button type="submit" size="lg" disabled={!draft.name.trim() || save.isPending}>

@@ -341,7 +341,7 @@ await browser.close();
 
 const list = [...unique.values()];
 const byType = list.reduce((a, i) => ((a[i.type] = (a[i.type] ?? 0) + 1), a), {});
-writeFileSync(join(OUT, "report.json"), JSON.stringify({ base: BASE, total, unique: list.length, byType, issues: list, allowlisted: allowedHits.map(({ rect, ...x }) => x) }, null, 2));
+writeFileSync(join(OUT, "report.json"), JSON.stringify({ base: BASE, total, unique: list.length, byType, issues: list, allowlisted: allowedHits.map(({ rect: _rect, ...x }) => x) }, null, 2));
 const lines = [`Text collision audit: ${list.length} unique issues (${total} occurrences) over ${jobs.length} configs x ${ROUTES.length} routes; ${allowedHits.length} allowlisted occurrences`, JSON.stringify(byType), ""];
 for (const i of list.sort((a, b) => a.type.localeCompare(b.type) || a.route.localeCompare(b.route)))
   lines.push(`[${i.type}] ${i.route}  "${i.text}"\n   ${i.selector}\n   ${i.extra}\n   in ${i.combos.length} configs: ${i.combos.slice(0, 6).join(", ")}${i.combos.length > 6 ? " ..." : ""}${i.screenshot ? `\n   shot ${i.screenshot}` : ""}`);

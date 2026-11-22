@@ -1,12 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { translateCategoryName } from "@/lib/i18n-data";
 import { DataState } from "@/components/ui/data-state";
 import { useLocale, useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getInsights, listIntegrations, type InsightsPayload } from "@/lib/api";
 import { shekels } from "@/lib/money";
 import { BalanceForecastCard } from "./balance-forecast-card";
+import { AccountForecastCard } from "./account-forecast-card";
 import { RecurringCalendar } from "./recurring-calendar";
 import { OverdraftCard } from "./overdraft-card";
 import { More } from "@/components/overview/more";
@@ -21,6 +23,16 @@ export function InsightsView({ part }: { part: "ahead" | "recurring" }) {
   const t = useTranslations("insights");
   const locale = useLocale();
   const money = (n: number) => shekels(Math.round(n), locale);
+  const tCat = useTranslations("categoriesSeeded");
+  // The server keeps an English sentence for logs and the bot; the screen words each alert in the user's language.
+  const anomalyText = (a: InsightsPayload["anomalies"][number]) =>
+    a.type === "category_spike" && a.category && a.amount != null && a.usual != null
+      ? t("anomalySpike", { category: translateCategoryName(a.category, tCat), amount: money(a.amount), usual: money(a.usual) })
+      : a.type === "new_large_merchant" && a.merchant && a.amount != null
+        ? t("anomalyNewMerchant", { merchant: a.merchant, amount: money(a.amount) })
+        : a.type === "duplicate_charge" && a.merchant && a.amount != null
+          ? t("anomalyDuplicate", { merchant: a.merchant, amount: money(a.amount), count: a.count ?? 2 })
+          : a.detail;
   const query = useQuery({ queryKey: ["insights"], queryFn: getInsights });
   const banks = useQuery({ queryKey: ["integrations"], queryFn: listIntegrations });
   const data = query.data;
@@ -46,6 +58,7 @@ export function InsightsView({ part }: { part: "ahead" | "recurring" }) {
     <div className="grid gap-6">
       {hero}
       <BalanceForecastCard />
+      <AccountForecastCard />
       <RecurringCalendar data={data} today={new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date())} />
       <Card>
         <CardHeader>
@@ -84,7 +97,7 @@ export function InsightsView({ part }: { part: "ahead" | "recurring" }) {
           ) : (
             <ul className="grid gap-2">
               {data.anomalies.map((a, i) => (
-                <li key={i}>{a.detail}</li>
+                <li key={i}>{anomalyText(a)}</li>
               ))}
             </ul>
           )}
@@ -146,6 +159,7 @@ function Subscriptions({ data, money }: { data: InsightsPayload; money: (n: numb
   const locale = useLocale();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
   const chipDate = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" });
+  const rel = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   // Soonest charge first, so the list reads as "what's next".
   const rows = data.series
     .map((s) => ({ s, next: nthCharge(s.cadence, s.lastDate, 1) }))
@@ -161,11 +175,14 @@ function Subscriptions({ data, money }: { data: InsightsPayload; money: (n: numb
         {rows.length === 0 ? (
           <p className="py-6 text-center text-muted-foreground">{t("noSubscriptions")}</p>
         ) : (
-          <ul className="-mx-2 divide-y divide-border">
-            {rows.map(({ s, next }) => {
+          [[t("dueThisWeek"), rows.filter((r) => r.next <= addDays(today, 7))], [t("upcomingLater"), rows.filter((r) => r.next > addDays(today, 7))]].filter(([, list]) => (list as typeof rows).length > 0).map(([title, list]) => (
+          <section key={title as string} aria-label={title as string} className="mb-3 last:mb-0">
+          <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title as string} ({(list as typeof rows).length})</h3>
+          <ul className="-mx-2 row-grid">
+            {(list as typeof rows).map(({ s, next }, i) => {
               const late = next < addDays(today, -5);
               return (
-                <li key={`${s.merchant}|${s.currency}`} className="flex min-h-16 items-center gap-3 px-2 py-3">
+                <li key={`${s.merchant}|${s.currency}|${i}`} className="flex min-h-16 items-center gap-3 px-2 py-3">
                   <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-base font-semibold text-primary">
                     {s.merchant.trim().charAt(0).toUpperCase()}
                   </span>
@@ -187,12 +204,14 @@ function Subscriptions({ data, money }: { data: InsightsPayload; money: (n: numb
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <span className="font-semibold tabular-nums"><bdi>{money(s.expectedAmount)}</bdi></span>
-                    <span className={`${chip} bg-muted text-muted-foreground tabular-nums`}>{chipDate.format(new Date(`${next}T12:00:00Z`))}</span>
+                    <span className={`${chip} bg-muted text-muted-foreground tabular-nums`} title={chipDate.format(new Date(`${next}T12:00:00Z`))}>{rel.format(Math.round((Date.parse(`${next}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000), "day")}</span>
                   </div>
                 </li>
               );
             })}
           </ul>
+          </section>
+          ))
         )}
       </CardContent>
     </Card>

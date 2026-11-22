@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -8,7 +9,7 @@ import { toast } from "sonner";
 import { getHome } from "@/lib/api";
 import { formatLastSync } from "@/lib/formatters";
 import { useFormatterLabels } from "@/lib/i18n-data";
-import { CommandPalette, OPEN_COMMAND_PALETTE } from "./command-palette";
+import { CommandPalette, OPEN_COMMAND_PALETTE, OPEN_INLINE_SEARCH } from "./command-palette";
 
 const NUDGED_KEY = "penny-stale-nudged";
 
@@ -22,24 +23,26 @@ export function BottomBar() {
   const labels = useFormatterLabels();
   const [shown, setShown] = useState(false);
   const hide = useCallback(() => setShown(false), []);
-  const home = useQuery({ queryKey: ["home"], queryFn: getHome });
+  const home = useQuery({ queryKey: ["home"], queryFn: () => getHome() });
 
+  // Wide screens search in place in the top bar; phones keep the floating bar.
+  const openSearch = useCallback(() => { if (matchMedia("(min-width: 768px)").matches) window.dispatchEvent(new Event(OPEN_INLINE_SEARCH)); else setShown(true); }, []);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
       if ((e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) {
         e.preventDefault();
-        setShown(true);
+        openSearch();
       }
     }
-    const open = () => setShown(true);
+    const open = () => openSearch();
     window.addEventListener("keydown", onKey);
     window.addEventListener(OPEN_COMMAND_PALETTE, open);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener(OPEN_COMMAND_PALETTE, open);
     };
-  }, []);
+  }, [openSearch]);
 
   // Once per browser session: if any bank is stale, failed or never synced, suggest updating.
   const health = home.data?.bankHealth;
@@ -53,7 +56,9 @@ export function BottomBar() {
   }, [health, labels, router, t]);
 
   if (!shown) return null;
-  return (
+  // Portalled to the body: inside the sidebar's <main> the fixed overlay is confined to that box, so it dimmed
+  // only part of the screen and left the sidebar's buttons half covered instead of properly behind it.
+  return createPortal(
     <>
     {/* Spotlight-style: the page dims and blurs behind the bar, so the search stands apart from busy content. */}
     <div aria-hidden onClick={hide} className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px] dark:bg-black/50" />
@@ -63,6 +68,7 @@ export function BottomBar() {
         <CommandPalette placeholder={t("askBar")} onClose={hide} />
       </div>
     </div>
-    </>
+    </>,
+    document.body,
   );
 }

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale } from "next-intl";
 import { Check, Palette, RotateCcw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { DEFAULT_STUDIO, type StudioPreferences } from "@/lib/budget-studio";
 import { useStudio } from "@/components/studio-provider";
-import { studioCopy } from "./studio-copy";
+import { useStudioCopy } from "./studio-copy";
 
 /** The design editor. `inline` shows it fully in place (Settings › Appearance); otherwise a button opens it in a sheet. */
 export function StudioEditor({ compact = false, inline = false }: { compact?: boolean; inline?: boolean }) {
@@ -15,8 +15,8 @@ export function StudioEditor({ compact = false, inline = false }: { compact?: bo
   // Inline (Settings › Appearance) saves every choice at once; the sheet previews until Save.
   // shortcut: the color picker saves on every drag tick; debounce if server writes get noisy.
   const onChange = inline ? persist : preview;
-  const locale = useLocale(); const t = useTranslations("studio");
-  const c = studioCopy(locale);
+  const locale = useLocale();
+  const c = useStudioCopy();
   const [open, setOpen] = useState(false);
   const [original, setOriginal] = useState(value);
   const change = <K extends keyof StudioPreferences>(key: K, v: StudioPreferences[K]) => onChange({ ...value, [key]: v });
@@ -37,9 +37,6 @@ export function StudioEditor({ compact = false, inline = false }: { compact?: bo
   const body = (
       <div className="studio-editor-scroll">
       <div className="studio-group bg-card">
-      {options("theme", ["pearl", "midnight", "glass", "system"])}
-      {options("accent", ["violet", "ocean", "jade", "rose"])}
-      <label className="studio-toggle"><span>{t("customColor")}<small className="block text-xs text-muted-foreground">{t("adjustedForReadableContrast")}</small></span><input type="color" aria-label={t("customColor")} value={value.customColor ?? "#5541cc"} onChange={e => change("customColor", e.target.value)} /></label>
       {options("density", ["comfortable", "compact"])}
       <label className="studio-toggle studio-motion-setting"><span>{c.motion}</span><input type="checkbox" role="switch" checked={value.motion} onChange={(e) => change("motion", e.target.checked)} /></label>
       </div>
@@ -63,7 +60,7 @@ export function StudioEditor({ compact = false, inline = false }: { compact?: bo
   return <Sheet open={open} onOpenChange={(next) => { if (next) { setOriginal(value); setOpen(true); } else close(); }}>
     <SheetTrigger className={`studio-customize ${compact ? "studio-customize-icon" : ""}`} aria-label={c.customize} title={c.customize}><Palette size={17} aria-hidden="true" />{!compact && <>{c.customize}<Sparkles size={14} aria-hidden="true" /></>}</SheetTrigger>
     <SheetContent side="right" className="budget-studio studio-editor" data-studio-theme={resolvedStudioTheme} data-studio-accent={value.accent} data-studio-motion={value.motion} dir={locale === "he" ? "rtl" : "ltr"}>
-      <div className="studio-editor-heading"><span className="studio-eyebrow">{locale === "he" ? "סטודיו עיצוב" : "DESIGN STUDIO"}</span><SheetTitle className="text-2xl font-semibold">{c.studio}</SheetTitle><SheetDescription>{c.studioHint}</SheetDescription></div>
+      <div className="studio-editor-heading"><span className="studio-eyebrow">{c.designStudio}</span><SheetTitle className="text-2xl font-semibold">{c.studio}</SheetTitle><SheetDescription>{c.studioHint}</SheetDescription></div>
       {body}
       <div className="studio-editor-footer"><button className="studio-primary" onClick={save}>{c.save}</button><button className="studio-quiet" onClick={close}>{c.cancel}</button></div>
     </SheetContent>

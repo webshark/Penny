@@ -5,6 +5,7 @@ directories:
 # The shell is just desktop/main.cjs; the app itself ships as resources/server.
 files:
   - desktop/main.cjs
+  - desktop/update.cjs
   - package.json
   # The shell uses only Electron and Node built-ins; the app's own packages ship under resources/server.
   - "!node_modules{,/**/*}"
@@ -16,12 +17,14 @@ extraResources:
 afterPack: desktop/after-pack.cjs
 npmRebuild: false
 asar: true
-icon: public/icons/icon-512.png
+icon: desktop/icon.png
 win:
   target:
     - target: nsis
       arch: [x64]
 nsis:
+  # Pinned: the release workflow copies this exact file to Penny-Setup-<version>.exe, which the release notes and READMEs link to.
+  artifactName: Penny Setup ${version}.${ext}
   oneClick: true
   perMachine: false
   createDesktopShortcut: true

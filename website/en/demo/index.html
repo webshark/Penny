@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penny · Clickable demo</title>
+<meta property="og:title" content="Penny · Clickable demo">
+<meta property="og:description" content="A clickable tour of the app with a sample household: dashboard, money on the table, budget, transactions, accounts, investments and more.">
+<meta name="description" content="A clickable tour of the app with a sample household: dashboard, money on the table, budget, transactions, accounts, investments and more.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%235541cc'/%3E%3Crect x='10' y='12' width='4' height='8' rx='2' fill='white'/%3E%3Crect x='18' y='12' width='4' height='8' rx='2' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../styles.css?v=0.2.2">
+<link rel="stylesheet" href="../../demo/tour.css">
+<meta property="og:image" content="https://sergey-bar.github.io/Penny/assets/og-en.jpg">
+<link rel="canonical" href="https://sergey-bar.github.io/Penny/en/demo/">
+<link rel="alternate" hreflang="en" href="https://sergey-bar.github.io/Penny/en/demo/">
+<link rel="alternate" hreflang="he" href="https://sergey-bar.github.io/Penny/demo/">
+<link rel="alternate" hreflang="x-default" href="https://sergey-bar.github.io/Penny/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sergey-bar.github.io/Penny/en/demo/">
+<meta property="og:site_name" content="Penny">
+<meta property="og:locale" content="en_US">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#5541cc">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Penny", "applicationCategory": "FinanceApplication", "operatingSystem": "Windows, macOS, Linux", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "ILS"}, "license": "https://opensource.org/licenses/MIT", "url": "https://sergey-bar.github.io/Penny/en/demo/", "image": "https://sergey-bar.github.io/Penny/assets/og-en.jpg", "description": "A clickable tour of the app with a sample household: dashboard, money on the table, budget, transactions, accounts, investments and more.", "inLanguage": "en", "softwareVersion": "0.2.0", "downloadUrl": "https://github.com/Sergey-Bar/Penny/releases/latest"}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="../" aria-label="Penny, home"><span class="brand-mark" aria-hidden="true"><span></span><span></span></span>Penny</a>
+    <nav class="nav-links" aria-label="Main">
+      <a class="hide-sm" href="../">Home</a>
+      <a href="../#install">Install</a>
+      <a class="lang" href="../../demo/" hreflang="he" lang="he">עברית</a>
+    </nav>
+  </div>
+</header>
+<main id="main" class="tour-page">
+  <div class="wrap">
+    <div class="tour-head">
+      <span class="kicker">Clickable demo</span>
+      <h1>Try Penny without installing it.</h1>
+      <p>These are the app's real screens with a sample household. Click the links inside the screen as you would in the app, or move through the list and the arrows.</p>
+    </div>
+    <div class="tour" id="tour" data-base="../../demo">
+      <nav aria-label="Tour screens"><ol class="tour-steps"></ol></nav>
+      <div class="tour-main">
+        <div class="frame">
+          <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>127.0.0.1 · Penny</span></div>
+          <div class="screen" dir="ltr"><img src="../../demo/en/home.webp" width="1440" height="900" alt=""><div class="hotspots"></div></div>
+        </div>
+        <label class="hint-toggle"><input type="checkbox">Show where you can click</label>
+        <div class="tour-copy" aria-live="polite">
+          <div><h2 tabindex="-1"></h2><p></p><ul></ul></div>
+          <div class="tour-nav">
+            <button type="button" class="btn btn-ghost" data-go="prev">Previous</button>
+            <span class="count"></span>
+            <button type="button" class="btn btn-primary" data-go="next">Next</button>
+          </div>
+        </div>
+        <div class="tour-end" hidden><p>This is a demo with sample data. In the app it's all yours, on your computer.</p><a class="btn btn-primary" href="https://github.com/Sergey-Bar/Penny/releases/latest">Download free</a></div>
+      </div>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <span>Penny · Open source under the MIT license</span>
+    <span><a href="https://github.com/Sergey-Bar/Penny">GitHub</a> · <a href="../../demo/" hreflang="he" lang="he">עברית</a></span>
+  </div>
+</footer>
+<script src="../../demo/hotspots.js"></script>
+<script type="module" src="../../demo/tour.js"></script>
+</body>
+</html>

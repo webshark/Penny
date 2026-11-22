@@ -57,13 +57,33 @@ export function buildCashflow(
   const off = { income: [] as Item[], expenses: [] as Item[], incomeTotal: 0, expenseTotal: 0 };
   const seen = new Set<number>();
 
+  // A row is always a parent category: a sub-category's spending rolls into the row above it, so the
+  // list stays as short as the household's top-level budget.
+  const rootOf = (c: Category): Category => {
+    let cur = c;
+    const walked = new Set<number>();
+    while (cur.parentId != null && !walked.has(cur.id)) {
+      walked.add(cur.id);
+      const parent = cat.get(cur.parentId);
+      if (!parent) break;
+      cur = parent;
+    }
+    return cur;
+  };
+
   const lineFor = (c: Category | undefined) => {
     if (!c) return variable;
     if (c.needType === "saving") return savings;
     if (c.costType === "fixed") return fixed;
-    if (c.budgetMode === "budgeted") {
-      if (!tracked.has(c.id)) tracked.set(c.id, { id: c.id, name: c.name, color: c.color, ...line() });
-      return tracked.get(c.id)!;
+    // Tracked when the category itself, or the parent it rolls into, is budgeted.
+    let budgeted = c.budgetMode === "budgeted";
+    for (let up = c.parentId != null ? cat.get(c.parentId) : undefined; up && !budgeted; up = up.parentId != null ? cat.get(up.parentId) : undefined) {
+      budgeted = up.budgetMode === "budgeted";
+    }
+    if (budgeted) {
+      const row = rootOf(c);
+      if (!tracked.has(row.id)) tracked.set(row.id, { id: row.id, name: row.name, color: row.color, ...line() });
+      return tracked.get(row.id)!;
     }
     return variable;
   };

@@ -54,7 +54,7 @@ export function OwnerSummary({ members, from, to }: { members: HouseholdMember[]
       {accounts.length > 0 && (
         <details className="mt-3">
           <summary className="cursor-pointer rounded text-xs text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring">{t("accountDefaults")}</summary>
-          <ul className="mt-2 grid gap-2">
+          <ul className="mt-2 grid max-w-3xl gap-x-8 gap-y-2 lg:grid-cols-2">
             {accounts.map((a) => (
               <li key={a.accountNumber} className="flex items-center justify-between gap-3 text-sm">
                 <span className="tabular-nums" dir="ltr">{a.label ?? a.provider} · {a.accountNumber.slice(-4)}</span>

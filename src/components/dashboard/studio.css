@@ -1,36 +1,42 @@
+/* Neutral graphite canvas, one violet accent, cards that separate by shadow rather than tint:
+   the calm surface language a figures-first money app needs. Every text pair here clears 4.5:1. */
+/* Light: a near-white canvas, white cards that separate by a hairline and a soft shadow, one violet.
+   Every text pair clears 4.5:1 (muted text on the canvas, violet text and white-on-violet). */
 :is(html.app-studio, .budget-studio) {
-  --background: #f5f5fa; --foreground: #202037; --card: #fff; --card-foreground: #202037;
-  --popover: #fff; --popover-foreground: #202037; --muted: #eeedf5; --muted-foreground: #656579;
-  --border: #e4e3ee; --secondary: #eeedf5; --secondary-foreground: #202037;
-  --accent: #eeedf5; --accent-foreground: #202037; --primary: #5541cc; --primary-foreground: #fff;
-  --ring: #5541cc; --action: #5541cc; --studio-ring-start: #b7acff; --studio-ring-end: #7961ef;
-  --input: #8b879e; --destructive: #b42e41;
-  --sidebar: var(--background); --sidebar-foreground: var(--foreground); --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground); --sidebar-accent: var(--studio-accent-soft);
-  --sidebar-accent-foreground: var(--primary); --sidebar-border: var(--border); --sidebar-ring: var(--ring);
-  --chart-1: var(--primary); --chart-2: var(--studio-ring-end); --chart-3: #308c71; --chart-4: #c2397f; --chart-5: #b87526;
-  --studio-hero: #3a2a94; --studio-glow: #9b87e3; --studio-accent-soft: #ede9fc;
-  --status-on-track: #17643d; --status-over: #b42e41; --status-heads-up: #945000;
-  --status-plenty-left: #4c39b8; --expense: #a63a4f; --segmented: #e9e7f1; --segmented-thumb: #fff;
-  /* Simple-mode tones (dark hero and light cards alike): income green, spending rose like --expense, savings blue. */
+  --background: #fbfbfd; --foreground: #17151f; --card: #fff; --card-foreground: #17151f;
+  --popover: #fff; --popover-foreground: #17151f; --muted: #efeff2; --muted-foreground: #615e74;
+  --border: #e6e5ee; --secondary: #efeff2; --secondary-foreground: #17151f;
+  --accent: #efeff3; --accent-foreground: #17151f; --primary: #7355be; --primary-foreground: #fff;
+  --ring: #7355be; --action: #6a4bb5; --studio-ring-start: #b9a6f0; --studio-ring-end: #7355be;
+  --input: #827e93; --destructive: #c0392b;
+  --sidebar: #fbfbfd; --sidebar-foreground: var(--foreground); --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground); --sidebar-accent: #efeff3;
+  --sidebar-accent-foreground: var(--foreground); --sidebar-border: var(--border); --sidebar-ring: var(--ring);
+  --chart-1: var(--primary); --chart-2: #2d7fb8; --chart-3: #2a8d52; --chart-4: #c2457a; --chart-5: #d9822b;
+  --studio-hero: #1f1b2e; --studio-glow: #8b6fe0; --studio-accent-soft: #f0ecfb;
+  --status-on-track: #1f7a46; --status-over: #b3261e; --status-heads-up: #8a4b00;
+  --status-plenty-left: #6a4bb5; --expense: #c0392b; --segmented: #efeff2; --segmented-thumb: #fff;
   --ring-income: #6fdc8c; --ring-spending: #ff8fa3; --ring-savings: #5aa9ff;
+  --card-elevation: 0 1px 2px rgb(23 21 31 / 4%), 0 8px 24px -16px rgb(40 30 80 / 14%);
   color: var(--foreground); color-scheme: light;
 }
-:is(html.app-studio, .budget-studio)[data-studio-accent="ocean"] { --primary: #1167a2; --ring: #1167a2; --action: #1167a2; --studio-ring-start: #93d6f5; --studio-ring-end: #489cdd; --studio-hero: #0d4675; --studio-glow: #6ebfef; --studio-accent-soft: #e4f1fa; }
-:is(html.app-studio, .budget-studio)[data-studio-accent="jade"] { --primary: #177551; --ring: #177551; --action: #177551; --studio-ring-start: #a7e9c6; --studio-ring-end: #4fbf92; --studio-hero: #0c5640; --studio-glow: #7cdcb1; --studio-accent-soft: #e4f4eb; }
-:is(html.app-studio, .budget-studio)[data-studio-accent="rose"] { --primary: #a93468; --ring: #a93468; --action: #a93468; --studio-ring-start: #f5b5d0; --studio-ring-end: #df72a5; --studio-hero: #761f50; --studio-glow: #e28ab4; --studio-accent-soft: #f9e9f0; }
+/* Dark: a warm, almost-black canvas (a screening room, not a grey office), cards one step up, a lighter violet
+   so links and labels stay readable on it. */
 :is(html.app-studio, .budget-studio)[data-studio-theme="midnight"] {
-  --background: #101118; --foreground: #f2f1f8; --card: #1b1c26; --card-foreground: #f2f1f8;
-  --popover: #1b1c26; --popover-foreground: #f2f1f8; --muted: #282934; --muted-foreground: #b2b0c3;
-  --border: #333440; --secondary: #282934; --secondary-foreground: #f2f1f8; --accent: #282934; --accent-foreground: #f2f1f8;
-  --primary: var(--studio-ring-start); --primary-foreground: #161421; --ring: var(--studio-ring-start);
-  --studio-accent-soft: #30303e; --status-on-track: #90d7ae; --status-over: #ff9aa8; --status-heads-up: #efc18c; --expense: #f29aa6;
-  --input: #77758a; --destructive: #ff9aa8; --destructive-foreground: #161421; --action: var(--studio-ring-start); --status-plenty-left: var(--studio-ring-start);
-  --segmented: #30303e; --segmented-thumb: #494657; color-scheme: dark;
+  --background: #0b0908; --foreground: #f5f3f0; --card: #1b1917; --card-foreground: #f5f3f0;
+  --popover: #201d1b; --popover-foreground: #f5f3f0; --muted: #282624; --muted-foreground: #a9a6a1;
+  --border: #2e2b28; --secondary: #282624; --secondary-foreground: #f5f3f0; --accent: #2a2725; --accent-foreground: #f5f3f0;
+  --primary: #a58cf0; --primary-foreground: #120e1f; --ring: #a58cf0; --action: #a58cf0; --studio-ring-start: #a58cf0;
+  --sidebar: #0b0908; --sidebar-accent: #221f1d;
+  --studio-hero: #1b1917; --studio-glow: #8264cd; --studio-accent-soft: #241f30;
+  --status-on-track: #79d9a2; --status-over: #ff9aa8; --status-heads-up: #efc18c; --expense: #f2938a;
+  --input: #7d7a75; --destructive: #f2938a; --destructive-foreground: #1b0f0d; --status-plenty-left: #a58cf0;
+  --chart-2: #6fb3d1; --chart-3: #6fca9a; --chart-4: #ea8fb8; --chart-5: #f0b26b;
+  --segmented: #282624; --segmented-thumb: #3a3633; color-scheme: dark;
+  --card-elevation: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 14px 30px -22px rgb(0 0 0 / 80%);
 }
 .studio-page { min-height: 100vh; background: var(--background); }
-.studio-page[data-studio-theme="glass"] { background: radial-gradient(ellipse at 5% 10%, #e3dff8 0, transparent 45%), radial-gradient(ellipse at 90% 55%, #e1eef4 0, transparent 50%), #f5f5fa; }
-.studio-content { max-width: 1320px; margin: auto; padding: 30px 40px 64px; display: flex; flex-direction: column; gap: 26px; }
+.studio-content { max-width: 1920px; margin: auto; padding: 30px 40px 64px; display: flex; flex-direction: column; gap: 26px; }
 .studio-welcome { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 5px 0 8px; }
 .studio-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
 .studio-welcome h2 { font-size: clamp(26px, 2.6vw, 36px); line-height: 1.35; font-weight: 600; letter-spacing: -.04em; margin: 8px 0; }
@@ -39,14 +45,18 @@
 .studio-customize svg { color: var(--primary); }
 .studio-top-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 22px; align-items: start; }
 .studio-top-grid.studio-single, [data-studio-layout="stacked"] .studio-top-grid { grid-template-columns: minmax(0, 1fr); }
-.studio-overview { position: relative; overflow: hidden; border-radius: 28px; padding: 28px 30px 20px; background: radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--studio-glow) 45%, transparent), transparent 65%), var(--studio-hero); color: #fff; box-shadow: 0 12px 35px #20133712; }
+/* The one deep surface on a page: graphite, a low violet bloom from the end corner, a hairline edge.
+   Deliberately not a colour block: the numbers, not the background, carry the page. */
+.studio-overview { position: relative; overflow: hidden; border-radius: 28px; padding: 26px 28px 20px; background: radial-gradient(120% 150% at 100% 0%, color-mix(in srgb, var(--studio-glow) 30%, transparent), transparent 64%), var(--studio-hero); color: #fff; border: 1px solid color-mix(in srgb, #fff 9%, transparent); box-shadow: 0 1px 0 rgb(255 255 255 / 6%) inset, 0 20px 44px -32px rgb(18 14 42 / 85%); }
 .studio-overview::before { content: ""; position: absolute; width: 340px; height: 340px; border: 1px solid #ffffff07; border-radius: 50%; inset-inline-end: -170px; top: -140px; pointer-events: none; }
 .studio-overview-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.studio-overview .studio-eyebrow { color: #d9d2ef; }
-.studio-month { font-size: 12px; color: #d9d2ef; }
+/* Status tones inside the summary card are read on graphite, so they take the light variants. */
+.studio-overview { --status-on-track: #7ee2a8; --status-over: #ffb4ab; --status-heads-up: #ffd27a; }
+.studio-overview .studio-eyebrow { color: #c9c3dc; }
+.studio-month { font-size: 12px; color: #c9c3dc; }
 .studio-overview-body { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 28px 0 20px; }
 .studio-balance > p:first-child { font-size: 14px; color: #e1dceb; }
-.studio-amount { font-size: clamp(38px, 4.2vw, 62px); line-height: 1.3; font-weight: 400; letter-spacing: -.045em; margin: 8px 0 2px; white-space: nowrap; }
+.studio-amount { font-size: clamp(36px, 3.8vw, 56px); line-height: 1.25; font-weight: 300; letter-spacing: -.04em; margin: 6px 0 2px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .studio-budget-context { font-size: 12px; color: #c8c3d7; }
 .studio-status { display: inline-flex; align-items: center; gap: 6px; color: #b5e7c8; background: #adf3c310; padding: 5px 10px; border: 1px solid #b5e7c81c; border-radius: 50px; font-size: 12px; margin-top: 16px; }
 .studio-status.is-over { color: #ffbac6; background: #ffbac614; }
@@ -63,16 +73,37 @@
 .studio-pace > span { font-size: 12px; white-space: nowrap; color: #c8c3d7; }
 .studio-pace > div { height: 3px; background: #ffffff12; width: 100%; border-radius: 8px; overflow: hidden; }
 .studio-pace i { display: block; height: 100%; background: #b6adc9; }
-.studio-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid #ffffff16; padding-top: 20px; gap: 10px; }
-.studio-stats > div + div { border-inline-start: 1px solid #ffffff16; padding-inline-start: 15px; }
-.studio-stats dt { font-size: 12px; color: #c8c3d7; }
-.studio-stats dd { font-size: 20px; font-weight: 400; margin-top: 6px; font-variant-numeric: tabular-nums; }
+/* Stat strip, tightened: one hairline across the card, columns divided by hairlines,
+   a small spaced label over a quiet figure. No per-stat boxes, so the eye reads three numbers as one row. */
+.studio-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid #ffffff1f; margin-top: 16px; padding-top: 0; gap: 0; }
+.studio-stats > div { padding: 15px 16px 2px; min-width: 0; }
+.studio-stats > div:first-child { padding-inline-start: 0; }
+.studio-stats > div + div { border-inline-start: 1px solid #ffffff1f; }
+.studio-stats dt { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #aea8c4; }
+.studio-stats dd { font-size: 21px; font-weight: 300; letter-spacing: -.015em; margin-top: 5px; font-variant-numeric: tabular-nums; }
 .studio-explanation { margin-top: 10px; font-size: 12px; color: #c8c3d7; display: flex; align-items: center; width: fit-content; }
 .studio-inline-link { display: flex; align-items: center; gap: 8px; color: #e1d9ff; margin-top: 16px; font-size: 13px; text-decoration: underline; }
 .studio-panel { padding: 24px; border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); border-radius: var(--radius-2xl); background: var(--card); } /* card anatomy: see globals.css */
 .studio-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .studio-panel-heading h2 { font-size: var(--text-headline); line-height: var(--text-headline--line-height); font-weight: 600; }
 .studio-panel-heading p { font-size: var(--text-footnote); line-height: 1.25rem; color: var(--muted-foreground); margin-top: 2px; }
+.studio-recent-heading { display: flex; align-items: center; gap: 11px; }
+.studio-recent-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px; border-radius: 12px; color: var(--primary); background: color-mix(in oklab, var(--primary) 10%, var(--card)); }
+.studio-recent-link { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; padding-inline: 10px; border-radius: 10px; color: var(--primary); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.studio-recent-link:hover { background: var(--accent); }
+.studio-recent-list { margin-top: 15px; }
+.studio-recent-list li { display: flex; align-items: center; gap: 13px; min-height: 65px; border-top: 1px solid var(--border); }
+@media (min-width: 80rem) { .studio-recent-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2rem; } }
+.studio-recent-kind { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; border-radius: 12px; }
+.studio-recent-kind.is-expense { color: var(--expense); background: color-mix(in oklab, var(--expense) 9%, var(--card)); }
+.studio-recent-kind.is-income { color: var(--status-on-track); background: color-mix(in oklab, var(--status-on-track) 9%, var(--card)); }
+.studio-recent-kind.is-transfer { color: var(--muted-foreground); background: var(--muted); }
+.studio-recent-main { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.studio-recent-name { overflow: hidden; font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.studio-recent-meta { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: 12px; }
+.studio-recent-amount { direction: ltr; unicode-bidi: isolate; flex: 0 0 auto; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.studio-recent-amount.is-income { color: var(--status-on-track); }
+.studio-recent-empty { padding-top: 18px; color: var(--muted-foreground); font-size: 13px; }
 .studio-chart-switch { display: flex; padding: 3px; background: var(--muted); border-radius: 12px; flex-shrink: 0; }
 .studio-chart-switch button { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: var(--muted-foreground); cursor: pointer; }
 .studio-chart-switch button[aria-pressed="true"] { background: var(--card); color: var(--primary); box-shadow: 0 1px 5px #0000000c; }
@@ -129,12 +160,10 @@
 .studio-options-theme button { flex-wrap: wrap; }
 .studio-theme-sample { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; height: 56px; background: #efedf6; border-radius: 7px; margin-bottom: 3px; padding: 12px; }
 .studio-theme-sample i { display: block; height: 30px; flex: 1; background: white; border-radius: 3px; }
-.studio-theme-sample i:first-child { flex: 2; background: #4b416c; }
-.sample-midnight { background: #15151d; }.sample-midnight i { background: #353444; }.sample-midnight i:first-child { background: #766391; }
-.sample-glass { background: linear-gradient(135deg, #d9ccf7, #b9d9e2); }.sample-glass i { background: #ffffff88; }.sample-glass i:first-child { background: #ffffffb0; }
+.studio-theme-sample i:first-child { flex: 2; background: #201e2a; }
+.sample-midnight { background: #0c0b0f; }.sample-midnight i { background: #1c1b23; }.sample-midnight i:first-child { background: #2c2939; }
 .studio-options-accent button { flex-wrap: wrap; }
 .studio-swatch { display: block; border-radius: 50%; width: 17px; height: 17px; }
-.swatch-violet { background: #6650d9; }.swatch-ocean { background: #207fbc; }.swatch-jade { background: #238b68; }.swatch-rose { background: #ba477e; }
 .studio-toggle { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border); }
 .studio-toggle input[type="checkbox"] { appearance: none; width: 38px; height: 22px; border-radius: 20px; background: var(--input); position: relative; cursor: pointer; flex-shrink: 0; }
 .studio-toggle input[type="checkbox"]::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; inset-inline-start: 3px; top: 3px; transition: transform .2s; }
@@ -156,7 +185,6 @@
 [data-studio-density="compact"] .studio-category-card > button { padding: 14px 18px; }
 [data-studio-density="compact"] .studio-category-card > button > .mt-4 { margin-top: 10px; }
 [data-studio-density="compact"] .studio-category-card .text-3xl { font-size: 20px; }
-@supports (backdrop-filter: blur(20px)) { [data-studio-theme="glass"] .studio-panel, [data-studio-theme="glass"] .studio-customize, [data-studio-theme="glass"] .studio-category-card { background: #ffffffa8; backdrop-filter: blur(20px); border-color: #ffffffdc; box-shadow: 0 8px 25px #42326606; } }
 @media (min-width: 1400px) { .studio-orbit { flex-basis: 190px; width: 190px; height: 190px; } }
 @media (max-width: 1100px) { .studio-content { padding: 24px; }.studio-top-grid { grid-template-columns: minmax(0, 1fr); }.studio-bars { gap: 18px; } }
 @media (max-width: 600px) {
@@ -169,7 +197,7 @@
   .studio-customize { min-height: 42px; padding: 0 14px; font-size: 12px; }
   .studio-overview { padding: 22px 20px 16px; border-radius: 24px; }
   .studio-overview-body { padding: 24px 0 20px; gap: 8px; }
-  .studio-amount { font-size: clamp(30px, 9vw, 46px); }
+  .studio-amount { font-size: clamp(34px, 10.5vw, 52px); }
   .studio-orbit { flex-basis: 112px; width: 112px; height: 112px; }.studio-orbit strong { font-size: 28px; }.studio-orbit small { font-size: 15px; }.studio-orbit span { font-size: 12px; }
   .studio-balance > p:first-child { font-size: 12px; }.studio-budget-context { font-size: 12px; }
   .studio-stats dd { font-size: 18px; }.studio-stats dt { font-size: 12px; }.studio-stats > div + div { padding-inline-start: 8px; }
@@ -194,58 +222,52 @@ html.app-studio .studio-settings-nav a { border-radius: 13px; min-height: 44px; 
 html.app-studio .studio-settings-nav a[aria-current="page"] { color: var(--primary); background: var(--studio-accent-soft); font-weight: 500; }
 html.app-studio :is([data-slot="dropdown-menu-content"], [data-slot="select-content"], [data-slot="popover-content"], [data-slot="dialog-content"]) { border: 1px solid var(--border); box-shadow: 0 16px 50px #18132618; }
 html.app-studio [data-slot="sidebar-inset"] { background: transparent; }
-html.app-studio .wallet { --card: var(--studio-hero); --primary-foreground: var(--studio-hero); background: radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--studio-glow) 45%, transparent), transparent 70%), var(--studio-hero); }
+html.app-studio .wallet { --card: var(--studio-hero); --primary-foreground: var(--studio-hero); background: radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--studio-glow) 26%, transparent), transparent 62%), var(--studio-hero); border: 1px solid color-mix(in srgb, #fff 9%, transparent); box-shadow: 0 1px 0 rgb(255 255 255 / 6%) inset, 0 20px 44px -32px rgb(18 14 42 / 85%); }
 html.app-studio .wallet::before { background: radial-gradient(ellipse at 0% 100%, var(--studio-glow), transparent 65%); opacity: .15; }
 .studio-customize.studio-customize-icon { width: 40px; min-height: 40px; padding: 0; justify-content: center; }
 .studio-options-theme { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.sample-system { background: linear-gradient(90deg, #efedf6 50%, #242330 50%); }
+.sample-system { background: linear-gradient(90deg, #f6f5f8 50%, #17161d 50%); }
 .studio-motion-setting { margin-bottom: 26px; }
 .studio-section-label { border-top: 1px solid var(--border); padding-top: 22px; margin-bottom: 20px; font-size: 12px; font-weight: 600; color: var(--primary); }
-html.app-studio[data-studio-theme="glass"] body { background: radial-gradient(ellipse at 5% 10%, #e3dff8 0, transparent 45%), radial-gradient(ellipse at 90% 55%, #e1eef4 0, transparent 50%), #f5f5fa; background-attachment: fixed; }
-html.app-studio[data-studio-theme="glass"] .studio-page { background: transparent; }
-@supports (backdrop-filter: blur(20px)) {
-  html.app-studio[data-studio-theme="glass"] :is([data-slot="sidebar-inner"], [data-slot="sidebar"][data-mobile="true"], .studio-settings-nav) { background: #f5f5faad; backdrop-filter: blur(24px) saturate(1.3); }
-  html.app-studio[data-studio-theme="glass"] .bg-card:not(.wallet) { background-color: #ffffffbf; backdrop-filter: blur(18px); }
-}
 html.app-studio[data-studio-density="compact"] [data-slot="sidebar-menu-button"] { min-height: 36px; }
 html.app-studio[data-studio-density="compact"] .studio-settings-nav a { min-height: 36px; padding-block: 7px; }
 html.app-studio[data-studio-density="compact"] :is([data-slot="dropdown-menu-item"], [data-slot="select-item"]) { padding-block: 5px; }
 @media (pointer: coarse) {
   html.app-studio[data-studio-density="compact"] :is([data-slot="sidebar-menu-button"], .studio-settings-nav a, [data-slot="dropdown-menu-item"], [data-slot="select-item"]) { min-height: 44px; }
 }
-@media (prefers-reduced-transparency: reduce) {
-  html.app-studio[data-studio-theme="glass"] :is([data-slot="sidebar-inner"], [data-slot="sidebar"][data-mobile="true"], .studio-settings-nav, .glass, .glass-popover, .bg-card:not(.wallet)) { background-color: var(--card); backdrop-filter: none; }
-}
 
 .mobile-dock { display: none; }
 @media (max-width: 767px) {
-  #main-content.mobile-dock-content { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+  #main-content.mobile-dock-content { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   /* iOS tab bar: translucent, hairline on top, the current tab tinted (no pill). */
-  .mobile-dock { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); position: fixed; bottom: 0; inset-inline: 0; z-index: 30; background: color-mix(in srgb, var(--card) 94%, transparent); backdrop-filter: saturate(180%) blur(24px); -webkit-backdrop-filter: saturate(180%) blur(24px); box-shadow: 0 -0.5px 0 var(--border); padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
+  /* A floating capsule instead of a glued bar: the page scrolls under it and it reads as hardware. */
+  .mobile-dock { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); position: fixed; bottom: calc(10px + env(safe-area-inset-bottom)); inset-inline: 10px; z-index: 30; background: color-mix(in srgb, var(--card) 82%, transparent); backdrop-filter: saturate(190%) blur(26px); -webkit-backdrop-filter: saturate(190%) blur(26px); border: 1px solid color-mix(in srgb, var(--border) 90%, transparent); border-radius: 24px; box-shadow: 0 16px 40px -20px rgb(20 18 43 / 45%), 0 2px 8px -4px rgb(20 18 43 / 20%); padding: 5px; }
+  html.dark .mobile-dock { box-shadow: 0 18px 44px -18px rgb(0 0 0 / 80%), 0 1px 0 rgb(255 255 255 / 6%) inset; }
+  .mobile-dock :is(a, button) { position: relative; transition: color 160ms ease, background-color 160ms ease, transform 160ms cubic-bezier(0.22,1,0.36,1); }
+  .mobile-dock :is(a, button):active { transform: scale(0.94); }
+  .mobile-dock a[aria-current="page"] { background: color-mix(in srgb, var(--primary) 12%, transparent); border-radius: 18px; }
   .mobile-dock :is(a, button) { min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted-foreground); font-size: 0.6875rem; font-weight: 500; line-height: 1.1; border-radius: 12px; -webkit-tap-highlight-color: transparent; }
   .mobile-dock :is(a, button):focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-  .mobile-dock a[aria-current="page"] { color: var(--primary); font-weight: 600; }
+  .mobile-dock a[aria-current="page"] { color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); font-weight: 600; }
   .mobile-dock a[aria-current="page"] svg { stroke-width: 2.4; }
+  /* The add button: a raised circle in the middle of the dock, the one action that is always a thumb away. */
+  .mobile-dock .mobile-dock-add { background: none; }
+  .mobile-dock .mobile-dock-add > span { display: grid; place-items: center; width: 48px; height: 48px; margin-top: -18px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--primary) 70%, transparent), 0 0 0 4px var(--background); }
 }
 
-html.app-studio[data-studio-custom="true"], html.app-studio[data-studio-custom="true"] .budget-studio {
-  --primary: var(--custom-primary); --ring: var(--custom-primary); --action: var(--custom-primary);
-  --studio-ring-start: color-mix(in srgb, var(--custom-primary) 45%, white);
-  --studio-ring-end: var(--custom-primary); --studio-glow: var(--custom-primary);
-  --studio-hero: color-mix(in srgb, var(--custom-primary) 60%, #120c2a);
-  --studio-accent-soft: color-mix(in srgb, var(--custom-primary) 12%, var(--card));
-}
 
 /* Glassmorphism in every theme: translucent, blurred surfaces over a soft tinted backdrop. */
+/* A whisper of tint behind the page, not a wash: the canvas has to read as paper. */
 html.app-studio body {
   background:
-    radial-gradient(60rem 40rem at 0% 0%, color-mix(in srgb, var(--studio-glow, var(--primary)) 16%, transparent), transparent 70%),
-    radial-gradient(50rem 40rem at 100% 100%, color-mix(in srgb, var(--chart-2) 12%, transparent), transparent 70%),
+    radial-gradient(60rem 40rem at 0% 0%, color-mix(in srgb, var(--studio-glow, var(--primary)) 7%, transparent), transparent 70%),
+    radial-gradient(50rem 40rem at 100% 100%, color-mix(in srgb, var(--chart-2) 5%, transparent), transparent 70%),
     var(--background);
   background-attachment: fixed;
 }
 @supports (backdrop-filter: blur(1px)) {
-  html.app-studio :is(.bg-card:not(.wallet), [data-slot="sidebar-inner"]) {
+  /* Chrome keeps its blur; content cards stay crisp, because a page of frosted panels reads as haze. */
+  html.app-studio [data-slot="sidebar-inner"] {
     background-color: color-mix(in srgb, var(--card) 74%, transparent);
     -webkit-backdrop-filter: blur(22px) saturate(1.5);
     backdrop-filter: blur(22px) saturate(1.5);
@@ -259,8 +281,8 @@ html.app-studio body {
   /* Sticky cells pin over scrolling content: keep them solid. */
   html.app-studio .bg-card.sticky { background-color: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; }
   html.app-studio .bg-card:not(.wallet) {
-    border-color: color-mix(in srgb, var(--foreground) 9%, transparent);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, white 7%, transparent), 0 12px 32px -14px #00000030;
+    border-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+    box-shadow: var(--card-elevation);
   }
 }
 @media (prefers-reduced-transparency: reduce) {
@@ -326,7 +348,7 @@ html.app-studio .header-bar { background-color: color-mix(in srgb, var(--backgro
 .month-nav-arrow:hover:not(:disabled) { background: #ffffff29; }
 .month-nav-arrow:disabled { opacity: .3; cursor: default; }
 .month-nav-label { min-width: 7.5em; padding-inline: 6px; text-align: center; font-size: 15px; font-weight: 600; white-space: nowrap; }
-.month-nav-today { position: relative; display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 12px; margin-inline-start: 4px; border-radius: 999px; background: #ffffff24; color: inherit; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.month-nav-today { position: relative; display: grid; place-items: center; width: 32px; height: 32px; margin-inline-start: 2px; border-radius: 999px; background: #ffffff24; color: inherit; }
 .month-nav-today::after { content: ""; position: absolute; inset: -7px 0; }
 .month-nav-today:hover { background: #ffffff38; }
 .month-strip { display: flex; gap: 4px; margin-top: 16px; padding: 14px 2px 2px; border-top: 1px solid #ffffff1f; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
@@ -353,3 +375,8 @@ html.app-studio .header-bar { background-color: color-mix(in srgb, var(--backgro
 .hero-with-aside { display: flex; align-items: center; gap: 16px; }
 .hero-with-aside > :first-child { flex: 1; min-width: 0; }
 .hero-aside { flex-shrink: 0; width: clamp(72px, 26vw, 180px); display: grid; place-items: center; }
+
+/* Slim hero above a list (transactions): the list, not the card, is the page. */
+.page-hero-compact { padding-block: 18px; }
+.page-hero-compact .studio-amount { font-size: clamp(28px, 3vw, 38px); }
+.page-hero-compact .studio-balance { padding-block: 4px; }

@@ -10,6 +10,9 @@ import { listAccountBalances } from "@/server/db/queries/assets";
 import { getMonthlyAverages } from "@/server/db/queries/fi";
 import { getPlan } from "@/server/db/queries/plan";
 import { cashAhead, type CashAhead } from "@/lib/cash-ahead";
+import { BANK_PROVIDERS } from "@/lib/types";
+
+const BANKS = BANK_PROVIDERS.filter((b) => b.kind === "bank").map((b) => b.id);
 
 /** "Left to spend until payday": synced bank balance, minus card bills due first; expected salary is not spendable yet. */
 export function computeCashAhead(ws: number, today: string): CashAhead {
@@ -35,5 +38,9 @@ export function computeCashAhead(ws: number, today: string): CashAhead {
     incomeSoFar,
     bankDebits: bankObligations(ws,i.series,today,addDays(today,35)),
     reservedCash: cashReserve(ws),
+    // A card bill the bank debited today (a card-bill transfer from a bank account) is already out of the balance.
+    billPaidToday: !!getDb()
+      .prepare(`SELECT 1 FROM transactions WHERE workspace_id = ? AND date = ? AND kind = 'transfer' AND charged_amount < 0 AND provider IN (${BANKS.map(() => "?").join(",")}) LIMIT 1`)
+      .get(ws, today, ...BANKS),
   }) };
 }

@@ -472,7 +472,7 @@ function DangerZone({
             {t("disconnectHint")}
           </p>
           {!confirming ? (
-            <IconButton
+            <IconButton showLabel
               label={t("disconnect")}
               variant="outline"
               className="mt-3 text-destructive hover:text-destructive"
@@ -488,7 +488,7 @@ function DangerZone({
               >
                 <X className="size-4" aria-hidden />
               </IconButton>
-              <IconButton
+              <IconButton showLabel
                 label={mutation.isPending ? t("disconnecting") : t("confirmDisconnect")}
                 variant="destructive"
                 onClick={() => mutation.mutate()}
